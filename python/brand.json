@@ -1,0 +1,16 @@
+{
+  "name": "IntelliForge Deep Research",
+  "footer": "deep-research.intelliforge.tech",
+  "fonts": { "heading": "Segoe UI Semibold", "body": "Segoe UI" },
+  "colors": {
+    "dark": "0A0F1C",
+    "primary": "7C3AED",
+    "primary_light": "A78BFA",
+    "accent": "06B6D4",
+    "text": "1E293B",
+    "muted": "64748B",
+    "light_bg": "FFFFFF",
+    "on_dark": "E2E8F0"
+  },
+  "logo_path": null
+}

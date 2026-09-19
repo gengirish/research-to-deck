@@ -1,0 +1,39 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createJob, updateJob } from "@/lib/jobs";
+import { getDeckQueue } from "@/lib/queue";
+
+export const runtime = "nodejs";
+
+const CreateDeckSchema = z.object({
+  topic: z.string().trim().min(3).max(300),
+  paperCount: z.number().int().min(10).max(100).default(50),
+});
+
+export async function POST(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
+  }
+  const parsed = CreateDeckSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: z.flattenError(parsed.error).fieldErrors }, { status: 400 });
+  }
+
+  const { topic, paperCount } = parsed.data;
+  const jobId = randomUUID();
+  await createJob(jobId, topic, paperCount);
+  try {
+    await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
+  } catch (err) {
+    await updateJob(jobId, { status: "failed", stage: "failed", error: "Could not enqueue job" });
+    console.error("enqueue failed", err);
+    return NextResponse.json({ error: "Queue unavailable, try again shortly" }, { status: 503 });
+  }
+
+  const origin = new URL(request.url).origin;
+  return NextResponse.json({ jobId, statusUrl: `${origin}/api/decks/${jobId}` }, { status: 202 });
+}
