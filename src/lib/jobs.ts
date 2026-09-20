@@ -63,11 +63,20 @@ export async function updateJob(
   );
 }
 
-export async function saveDeck(id: string, deck: Buffer, deckName: string): Promise<void> {
+/** Stores the finished deck: the .pptx for download, and its content for the UI to render. */
+export async function saveDeck(id: string, deck: Buffer, deckName: string, deckJson: unknown): Promise<void> {
   await getPool().query(
-    `UPDATE jobs SET deck = $2, deck_name = $3, status = 'done', stage = 'done', progress = 100, updated_at = now() WHERE id = $1`,
-    [id, deck, deckName],
+    `UPDATE jobs SET deck = $2, deck_name = $3, deck_json = $4::jsonb,
+            status = 'done', stage = 'done', progress = 100, updated_at = now()
+      WHERE id = $1`,
+    [id, deck, deckName, JSON.stringify(deckJson)],
   );
+}
+
+/** The render-ready deck, for the result view. Null until the job finishes. */
+export async function getDeckJson(id: string): Promise<unknown | null> {
+  const { rows } = await getPool().query<{ deck_json: unknown }>(`SELECT deck_json FROM jobs WHERE id = $1`, [id]);
+  return rows[0]?.deck_json ?? null;
 }
 
 export async function getDeck(id: string): Promise<{ deck: Buffer; deck_name: string } | null> {

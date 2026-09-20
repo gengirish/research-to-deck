@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJob, listJobEvents } from "@/lib/jobs";
+import { getDeckJson, getJob, listJobEvents } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
   // `?since=<last event id>` lets the UI poll for only the new activity.
   const since = Number(new URL(request.url).searchParams.get("since") ?? 0);
   const events = await listJobEvents(jobId, Number.isFinite(since) && since > 0 ? since : 0);
+
+  // Only fetched once the deck exists; the result view renders from it.
+  const deck = job.status === "done" ? await getDeckJson(jobId) : null;
 
   const origin = new URL(request.url).origin;
   return NextResponse.json({
@@ -34,6 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
       detail: e.detail,
       at: e.created_at,
     })),
+    deck,
     downloadUrl: job.status === "done" ? `${origin}/api/decks/${job.id}/download` : null,
     createdAt: job.created_at,
     updatedAt: job.updated_at,

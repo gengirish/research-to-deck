@@ -154,7 +154,7 @@ export async function runDeckJob(jobId: string): Promise<void> {
     },
   });
   const deckName = `${slugify(job.topic)}.pptx`;
-  await saveDeck(jobId, pptx, deckName);
+  await saveDeck(jobId, pptx, deckName, renderDeck);
   log(`done in ${timings.total_s}s (${renderDeck.slides.length} slides, ${renderDeck.references.length} references)`);
   await logJobEvent(
     jobId,

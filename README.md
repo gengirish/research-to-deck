@@ -106,6 +106,10 @@ curl http://localhost:3000/api/decks/<jobId>
 # only the activity since the last event you saw
 curl "http://localhost:3000/api/decks/<jobId>?since=7"
 
+# once status is "done" the response also carries the deck itself
+# -> {"deck":{"title":"…","slides":[{"title":"…","bullets":[{"text":"…","refs":[1,2]}],"notes":"…"}],
+#             "references":[{"n":1,"text":"Lewis et al. (2020). … https://doi.org/…"}]}}
+
 # download when status is "done"
 curl -o deck.pptx http://localhost:3000/api/decks/<jobId>/download
 ```
@@ -217,7 +221,8 @@ npm run test:py     # python-pptx renderer: slide count, notes on every slide, c
 
 ```
 src/app/api/decks/            POST create, GET status, GET download
-src/app/page.tsx              topic form + live pipeline timeline and activity console
+src/app/page.tsx              view state + polling (entry / running / result)
+src/components/                Industry design-system UI: job sheet, run view, deck viewer
 src/lib/paper.ts              provider-agnostic Paper shape + content-first selection
 src/lib/paperSearch.ts        provider router (PAPER_SOURCE) + display label
 src/lib/openAlex.ts           OpenAlex client (throttle, backoff, inverted-abstract rebuild)
@@ -236,7 +241,7 @@ src/lib/agentmailWebhook.ts   Svix signature verification + inbound parsing
 src/app/api/webhooks/         inbound AgentMail webhook
 worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
-db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log)
+db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json)
 ```
 
 ### Paper search provider

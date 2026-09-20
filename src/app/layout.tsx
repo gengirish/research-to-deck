@@ -1,10 +1,21 @@
 import type { Metadata, Viewport } from "next";
+import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import PWA from "./pwa";
 
+// The Industry design system pairs Barlow Condensed headings over Barlow body
+// text. Loading them here binds them to the --font-* tokens globals.css reads.
+const barlow = Barlow({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-barlow", display: "swap" });
+const barlowCondensed = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  variable: "--font-barlow-condensed",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Research-to-Deck",
-  description: "Turn 50+ papers into a cited, branded slide deck in minutes.",
+  description: "Name a topic. We screen the OpenAlex corpus, read the papers that matter, and compose a cited PowerPoint.",
   applicationName: "Research-to-Deck",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -23,8 +34,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0f1c",
-  colorScheme: "dark",
+  themeColor: "#f2f2f3",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -32,7 +43,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <body>
         {children}
         <PWA />
