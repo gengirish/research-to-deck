@@ -96,10 +96,21 @@ export interface IngestStats {
 }
 
 /**
+ * Reported as each paper finishes. `paper` and `source` are absent for the initial
+ * call that only announces how many papers were reused from an earlier job.
+ */
+export interface IngestProgress {
+  done: number;
+  total: number;
+  paper?: Paper;
+  source?: ContentSource;
+}
+
+/**
  * Fetches PDFs concurrently, chunks them, embeds all new chunks in batches, and upserts
  * into pgvector. Papers already ingested by an earlier job are reused.
  */
-export async function ingestPapers(papers: Paper[], onProgress: (done: number, total: number) => Promise<void>): Promise<IngestStats> {
+export async function ingestPapers(papers: Paper[], onProgress: (progress: IngestProgress) => Promise<void>): Promise<IngestStats> {
   const pool = getPool();
   const existing = await pool.query<{ paper_id: string; content_source: ContentSource }>(
     `SELECT paper_id, content_source FROM papers WHERE paper_id = ANY($1) AND ingested_at IS NOT NULL`,
@@ -109,12 +120,12 @@ export async function ingestPapers(papers: Paper[], onProgress: (done: number, t
   const todo = papers.filter((p) => !reused.has(p.paperId));
 
   let done = reused.size;
-  await onProgress(done, papers.length);
+  await onProgress({ done, total: papers.length });
 
   const built = await mapWithConcurrency(todo, PDF_CONCURRENCY, async (paper) => {
     const result = await buildChunks(paper);
     done++;
-    await onProgress(done, papers.length);
+    await onProgress({ done, total: papers.length, paper, source: result.source });
     return { paper, ...result };
   });
 

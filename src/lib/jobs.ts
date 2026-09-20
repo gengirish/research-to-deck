@@ -118,3 +118,54 @@ export async function attachInboundEventJob(eventId: string, jobId: string): Pro
 export async function releaseInboundEvent(eventId: string): Promise<void> {
   await getPool().query(`DELETE FROM inbound_events WHERE event_id = $1`, [eventId]);
 }
+
+export type JobEventLevel = "info" | "success" | "warn" | "error";
+
+export interface JobEventRow {
+  id: string;
+  stage: string;
+  level: JobEventLevel;
+  message: string;
+  detail: Record<string, unknown> | null;
+  created_at: Date;
+}
+
+/**
+ * Appends one line to a job's activity log. Telemetry must never be the reason a
+ * deck fails, so a write error is logged and swallowed rather than thrown.
+ */
+export async function logJobEvent(
+  id: string,
+  stage: JobStage,
+  message: string,
+  { level = "info", detail }: { level?: JobEventLevel; detail?: Record<string, unknown> } = {},
+): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO job_events (job_id, stage, level, message, detail) VALUES ($1, $2, $3, $4, $5::jsonb)`,
+      [id, stage, level, message.slice(0, 500), detail ? JSON.stringify(detail) : null],
+    );
+  } catch (err) {
+    console.error(`[job ${id.slice(0, 8)}] could not record event "${message}":`, err);
+  }
+}
+
+/**
+ * Events for a job, oldest first. `afterId` makes polling incremental.
+ * Degrades to an empty log rather than breaking the status endpoint, so a deploy
+ * that lands before `003_job_events.sql` still reports stage and progress.
+ */
+export async function listJobEvents(id: string, afterId = 0, limit = 500): Promise<JobEventRow[]> {
+  try {
+    const { rows } = await getPool().query<JobEventRow>(
+      `SELECT id, stage, level, message, detail, created_at
+         FROM job_events WHERE job_id = $1 AND id > $2
+        ORDER BY id ASC LIMIT $3`,
+      [id, afterId, limit],
+    );
+    return rows;
+  } catch (err) {
+    console.error(`[job ${id.slice(0, 8)}] could not read events:`, err);
+    return [];
+  }
+}

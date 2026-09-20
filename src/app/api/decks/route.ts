@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isEmailEnabled } from "@/lib/email";
-import { createJob, updateJob } from "@/lib/jobs";
+import { createJob, logJobEvent, updateJob } from "@/lib/jobs";
 import { getDeckQueue } from "@/lib/queue";
 
 export const runtime = "nodejs";
@@ -35,8 +35,10 @@ export async function POST(request: Request) {
   await createJob(jobId, topic, paperCount, { notifyEmail: email });
   try {
     await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
+    await logJobEvent(jobId, "queued", "Request accepted and queued for a worker", { detail: { topic, paperCount } });
   } catch (err) {
     await updateJob(jobId, { status: "failed", stage: "failed", error: "Could not enqueue job" });
+    await logJobEvent(jobId, "failed", "Could not reach the job queue", { level: "error" });
     console.error("enqueue failed", err);
     return NextResponse.json({ error: "Queue unavailable, try again shortly" }, { status: 503 });
   }
