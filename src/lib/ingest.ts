@@ -2,7 +2,7 @@ import { chunkPages, summaryChunk, type Chunk } from "./chunk";
 import { getPool, toVectorLiteral } from "./db";
 import { mapWithConcurrency } from "./http";
 import { fetchPdfPages } from "./pdf";
-import { searchPapers, type Paper } from "./semanticScholar";
+import { paperSource, searchPapers, type Paper } from "./paperSearch";
 import { embed } from "./voyage";
 
 const SEARCH_CACHE_TTL_HOURS = 24;
@@ -10,10 +10,11 @@ const PDF_CONCURRENCY = 6;
 
 export type ContentSource = "pdf" | "abstract" | "title";
 
-/** Semantic Scholar search with a per-topic Postgres cache. */
+/** Paper search with a per-topic Postgres cache. */
 export async function findPapers(topic: string, count: number): Promise<Paper[]> {
   const pool = getPool();
-  const cacheKey = `${topic.trim().toLowerCase().replace(/\s+/g, " ")}|${count}`;
+  // Provider is part of the key: switching sources must not serve the old provider's hits.
+  const cacheKey = `${paperSource()}|${topic.trim().toLowerCase().replace(/\s+/g, " ")}|${count}`;
   const cached = await pool.query<{ results: Paper[] }>(
     `SELECT results FROM search_cache WHERE cache_key = $1 AND created_at > now() - make_interval(hours => $2)`,
     [cacheKey, SEARCH_CACHE_TTL_HOURS],

@@ -2,6 +2,8 @@ import { toRenderDeck } from "./citations";
 import { env } from "./env";
 import { attachPapersToJob, findPapers, ingestPapers } from "./ingest";
 import { getJob, saveDeck, updateJob } from "./jobs";
+import { paperSourceLabel } from "./paperSearch";
+import { notifyDeckReady } from "./notify";
 import { renderPptx } from "./render";
 import { generateSubQueries, retrieve } from "./retrieval";
 import { loadSourcePapers, synthesizeDeck } from "./synthesis";
@@ -28,7 +30,7 @@ export async function runDeckJob(jobId: string): Promise<void> {
   await updateJob(jobId, { status: "running", stage: "searching", progress: 2 });
   let t = Date.now();
   const papers = await findPapers(job.topic, job.paper_count);
-  if (papers.length === 0) throw new Error(`Semantic Scholar returned no papers for "${job.topic}"`);
+  if (papers.length === 0) throw new Error(`${paperSourceLabel()} returned no papers for "${job.topic}"`);
   await attachPapersToJob(jobId, papers);
   timings.search_s = seconds(t);
   log(`found ${papers.length} papers in ${timings.search_s}s`);
@@ -69,7 +71,7 @@ export async function runDeckJob(jobId: string): Promise<void> {
   const renderDeck = toRenderDeck(deck, sources, {
     topic: job.topic,
     generatedOn: new Date().toISOString().slice(0, 10),
-    statsLine: `Synthesized from ${ingest.papers} papers (${ingest.pdf} full-text, ${ingest.abstract + ingest.titleOnly} abstract-only) via Semantic Scholar`,
+    statsLine: `Synthesized from ${ingest.papers} papers (${ingest.pdf} full-text, ${ingest.abstract + ingest.titleOnly} abstract-only) via ${paperSourceLabel()}`,
   });
   const pptx = await renderPptx(renderDeck);
   timings.render_s = seconds(t);
@@ -84,6 +86,13 @@ export async function runDeckJob(jobId: string): Promise<void> {
       timings,
     },
   });
-  await saveDeck(jobId, pptx, `${slugify(job.topic)}.pptx`);
+  const deckName = `${slugify(job.topic)}.pptx`;
+  await saveDeck(jobId, pptx, deckName);
   log(`done in ${timings.total_s}s (${renderDeck.slides.length} slides, ${renderDeck.references.length} references)`);
+
+  await notifyDeckReady(job, pptx, deckName, {
+    slides: renderDeck.slides.length,
+    references: renderDeck.references.length,
+    papers: ingest.papers,
+  });
 }

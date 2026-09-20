@@ -19,7 +19,7 @@ interface JobStatus {
 
 const STAGE_LABELS: Record<string, string> = {
   queued: "Waiting for a worker",
-  searching: "Searching Semantic Scholar",
+  searching: "Searching the literature",
   ingesting: "Downloading and embedding papers",
   retrieving: "Finding the strongest evidence",
   synthesizing: "Writing slides with Claude",
@@ -79,7 +79,7 @@ export default function Home() {
       <div className="eyebrow">IntelliForge Deep Research</div>
       <h1>Research-to-Deck</h1>
       <p className="lede">
-        Enter a research topic. We read 50+ papers from Semantic Scholar and turn them into a cited, branded PowerPoint deck with
+        Enter a research topic. We read 50+ papers from OpenAlex and turn them into a cited, branded PowerPoint deck with
         speaker notes.
       </p>
 

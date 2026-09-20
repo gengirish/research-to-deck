@@ -4,7 +4,8 @@
 **Form:** https://www.semanticscholar.org/product/api#api-key-form
 **Applicant:** gen.girish@gmail.com
 **Project:** Research-to-Deck Generator — https://research-to-deck.vercel.app
-**Status:** submitted, awaiting approval
+**Status:** superseded on 2026-09-20 — the project moved to OpenAlex, which needs no key.
+Kept as a record of the application; Semantic Scholar remains selectable via `PAPER_SOURCE=semanticscholar`.
 
 Why it was needed: unauthenticated Semantic Scholar search began returning `429` on
 every request, which stalls deck jobs at the `searching` stage until a key is set.

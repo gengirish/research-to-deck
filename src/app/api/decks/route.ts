@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isEmailEnabled } from "@/lib/email";
 import { createJob, updateJob } from "@/lib/jobs";
 import { getDeckQueue } from "@/lib/queue";
 
@@ -9,6 +10,8 @@ export const runtime = "nodejs";
 const CreateDeckSchema = z.object({
   topic: z.string().trim().min(3).max(300),
   paperCount: z.number().int().min(10).max(100).default(50),
+  /** Optional: AgentMail emails the finished deck here instead of you polling. */
+  email: z.email().max(320).optional(),
 });
 
 export async function POST(request: Request) {
@@ -23,9 +26,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request", details: z.flattenError(parsed.error).fieldErrors }, { status: 400 });
   }
 
-  const { topic, paperCount } = parsed.data;
+  const { topic, paperCount, email } = parsed.data;
+  if (email && !isEmailEnabled()) {
+    return NextResponse.json({ error: "Email delivery is not configured on this deployment" }, { status: 400 });
+  }
+
   const jobId = randomUUID();
-  await createJob(jobId, topic, paperCount);
+  await createJob(jobId, topic, paperCount, { notifyEmail: email });
   try {
     await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
   } catch (err) {
@@ -35,5 +42,5 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
-  return NextResponse.json({ jobId, statusUrl: `${origin}/api/decks/${jobId}` }, { status: 202 });
+  return NextResponse.json({ jobId, statusUrl: `${origin}/api/decks/${jobId}`, notifyEmail: email ?? null }, { status: 202 });
 }

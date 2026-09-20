@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { updateJob } from "../src/lib/jobs";
+import { notifyDeckFailed } from "../src/lib/notify";
 import { runDeckJob } from "../src/lib/pipeline";
 import { DECK_QUEUE, redisConnection, type DeckJobData } from "../src/lib/queue";
 
@@ -17,6 +18,7 @@ worker.on("failed", async (job, err) => {
     await updateJob(job.data.jobId, { status: "failed", stage: "failed", error: err.message.slice(0, 1000) }).catch((e) =>
       console.error("[worker] could not record failure:", e),
     );
+    await notifyDeckFailed(job.data.jobId, err.message).catch((e) => console.error("[worker] could not send failure email:", e));
   }
 });
 worker.on("ready", () => console.log(`[worker] listening on queue "${DECK_QUEUE}"`));

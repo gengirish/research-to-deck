@@ -1,24 +1,13 @@
 import { env } from "./env";
 import { fetchWithRetry, HttpError } from "./http";
+import { selectPapers, type Paper } from "./paper";
+
+export { selectPapers, type Paper };
 
 const API_BASE = "https://api.semanticscholar.org/graph/v1";
 const FIELDS = "paperId,title,authors,year,venue,abstract,citationCount,externalIds,openAccessPdf,url";
 const PAGE_SIZE = 100;
 const MIN_INTERVAL_MS = 1_100; // keyed limit is ~1 req/s
-
-export interface Paper {
-  paperId: string;
-  title: string;
-  authors: string[];
-  year: number | null;
-  venue: string | null;
-  abstract: string | null;
-  citationCount: number | null;
-  url: string | null;
-  pdfUrl: string | null;
-  doi: string | null;
-  arxivId: string | null;
-}
 
 interface RawPaper {
   paperId: string;
@@ -60,18 +49,6 @@ export function normalizePaper(raw: RawPaper): Paper | null {
     doi: ext.DOI ? String(ext.DOI) : null,
     arxivId: ext.ArXiv ? String(ext.ArXiv) : null,
   };
-}
-
-/**
- * Keeps Semantic Scholar's relevance order, but promotes papers that have usable
- * content (PDF or abstract) ahead of title-only ones, then takes `count`.
- */
-export function selectPapers(papers: Paper[], count: number): Paper[] {
-  const seen = new Set<string>();
-  const unique = papers.filter((p) => !seen.has(p.paperId) && seen.add(p.paperId));
-  const withContent = unique.filter((p) => p.pdfUrl || p.abstract);
-  const titleOnly = unique.filter((p) => !p.pdfUrl && !p.abstract);
-  return [...withContent, ...titleOnly].slice(0, count);
 }
 
 async function searchPage(query: string, offset: number): Promise<{ total: number; data: RawPaper[] }> {
