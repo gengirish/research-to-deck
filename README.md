@@ -83,7 +83,8 @@ npm run worker                       # terminal 2: BullMQ worker
 | `AGENTMAIL_API_KEY` | app + worker | optional. Unset disables email delivery entirely; the rest of the pipeline is unaffected |
 | `AGENTMAIL_DOMAIN` | app + worker | optional, default `agentmail.to`. A verified custom domain improves deliverability |
 | `AGENTMAIL_INBOX_USERNAME` | app + worker | optional, default `decks` — the system inbox is `decks@<domain>` |
-| `AGENTMAIL_WEBHOOK_SECRET` | app | `whsec_…` Svix secret; required only for inbound email |
+| `AGENTMAIL_INBOX_ID` | app + worker | optional. Reuse an existing inbox (an address) instead of creating one. Required when the account is at its plan inbox limit |
+| `AGENTMAIL_WEBHOOK_SECRET` | app | `whsec_…` Svix secret; required only for inbound email. Leave unset for outbound-only |
 | `APP_BASE_URL` | worker | public origin for the download/status links inside emails |
 
 ## API
@@ -120,6 +121,15 @@ saved, and emails a failure notice with the pipeline error if the job fails. Dec
 attached (AgentMail caps a send at 6 MB including base64 overhead) — those emails carry the download link
 instead. Each job sends at most one email, claimed via `jobs.notified_at` so a BullMQ retry cannot double-send.
 Delivery is best-effort: an AgentMail outage never fails a deck that rendered.
+
+The system inbox is resolved in this order: `AGENTMAIL_INBOX_ID`, then an existing inbox at
+`<username>@<domain>`, then a fresh create. It never creates blindly — AgentMail plans cap inbox count,
+so on a full account a create would fail rather than return the inbox you meant to reuse.
+
+**Inbound is opt-in.** It only runs once a webhook is registered and `AGENTMAIL_WEBHOOK_SECRET` is set;
+without the secret the route returns 503 and outbound delivery is unaffected. Do not register the webhook
+against an inbox that receives real mail — *every* message arriving there would start a deck job and get an
+auto-reply.
 
 **Inbound.** `POST /api/webhooks/agentmail` turns a received email into a job and replies in-thread — first
 an acknowledgement, then the finished deck. The subject line is the topic (`Re:`/`Fwd:` prefixes stripped,
