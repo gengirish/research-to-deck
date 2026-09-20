@@ -11,7 +11,7 @@ flowchart LR
   U[Browser / curl] -->|POST /api/decks| API[Next.js API on Vercel]
   API -->|insert job| PG[(Postgres + pgvector)]
   API -->|enqueue| R[(Redis / BullMQ)]
-  R --> W[Worker on Railway<br/>Node + Python]
+  R --> W[Worker on Fly.io<br/>Node + Python]
   W -->|search| S2[Semantic Scholar API]
   W -->|fetch open-access PDFs| PDF[arXiv / publishers]
   W -->|embed + rerank| V[Voyage AI]
@@ -34,7 +34,7 @@ The finished `.pptx` is stored in the `jobs` table and served by `GET /api/decks
 
 ### Why the worker is not on Vercel
 
-Vercel functions can't host a long-running BullMQ consumer or run Python inside a Node function, and a 50-paper job runs for minutes. So the Next.js app (form + API) deploys to Vercel, and the worker deploys as a container (`Dockerfile.worker`) on Railway, Render or Fly. Both connect to the same Postgres and Redis.
+Vercel functions can't host a long-running BullMQ consumer or run Python inside a Node function, and a 50-paper job runs for minutes. So the Next.js app (form + API) deploys to Vercel, and the worker deploys as a container (`Dockerfile.worker`) on Fly.io (Railway or Render work the same way). Both connect to the same Postgres and Redis.
 
 ## Local setup
 
@@ -57,7 +57,7 @@ npm run worker                       # terminal 2: BullMQ worker
 | `ANTHROPIC_API_KEY` | worker | Claude sub-queries + synthesis |
 | `CLAUDE_MODEL` | worker | optional, default `claude-sonnet-5` |
 | `VOYAGE_API_KEY` | worker | embeddings + reranking |
-| `SEMANTIC_SCHOLAR_API_KEY` | worker | optional but recommended (dedicated ~1 req/s limit instead of the shared pool) |
+| `SEMANTIC_SCHOLAR_API_KEY` | worker | **required in practice.** The keyless shared pool now answers 429 to every request, so jobs stall in backoff and fail at the `searching` stage. Request a key at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api). |
 | `DATABASE_URL` | app + worker | Postgres with the `vector` extension (Neon or Supabase in prod) |
 | `REDIS_URL` | app + worker | `rediss://` for TLS (e.g. Upstash) |
 | `PYTHON_BIN` | worker | interpreter with python-pptx (`python3` in the Docker image) |
@@ -89,10 +89,23 @@ npm run smoke -- http://localhost:3000 "retrieval-augmented generation evaluatio
 
 ## Deploy
 
-1. **Database:** create a Neon or Supabase Postgres, then run `DATABASE_URL=… npm run db:migrate`.
-2. **Redis:** create an Upstash Redis and copy its `rediss://` URL.
-3. **Worker:** deploy `Dockerfile.worker` to Railway (New Service → GitHub repo → set the Dockerfile path) with all the worker env vars.
-4. **App:** `vercel` (preview) → set `DATABASE_URL` and `REDIS_URL` → `vercel --prod`.
+Live: **https://research-to-deck.vercel.app** (app on Vercel, worker on Fly.io).
+
+1. **Database:** on the Vercel project, Storage → Create Database → Neon (free tier), connected to the project. That sets `DATABASE_URL`. Copy the value into `.env.local` and run `npm run db:migrate`.
+2. **Redis:** Storage → Create Database → Upstash → **Redis** (not QStash or Vector), connected to the project. That sets `REDIS_URL`. Copy the `rediss://` value into `.env.local` too.
+3. **Worker:** `fly apps create research-to-deck-worker`, then stage the secrets and deploy the container from `fly.toml` / `Dockerfile.worker`:
+
+   ```bash
+   fly secrets import --app research-to-deck-worker --stage < secrets.env   # DATABASE_URL, REDIS_URL,
+                                                                           # VOYAGE_API_KEY, ANTHROPIC_API_KEY,
+                                                                           # CLAUDE_MODEL, PYTHON_BIN=python3
+   fly deploy --app research-to-deck-worker --remote-only --ha=false
+   fly logs --app research-to-deck-worker        # expect: [worker] listening on queue "decks"
+   ```
+
+4. **App:** `vercel link` then `vercel deploy --prod`. The app only needs `DATABASE_URL` and `REDIS_URL`, both injected by the two integrations; the AI keys live on the worker alone.
+
+Marketplace values are stored as `sensitive` on Vercel, so `vercel env pull` returns them empty. Copy the connection strings out of the Neon and Upstash store pages when you need them locally or on Fly.
 
 ## Tests
 
@@ -119,3 +132,16 @@ worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
 db/migrations/                schema (papers, chunks + HNSW, jobs, cache)
 ```
+
+### Known limitation: Semantic Scholar rate limits
+
+As of the deploy on 2026-09-20, unauthenticated Semantic Scholar search returns `429` on every call.
+The client backs off 8 times before giving up, so a job without `SEMANTIC_SCHOLAR_API_KEY` sits at
+`searching` for many minutes and then fails. Set the key on the worker and the pipeline runs normally:
+
+```bash
+fly secrets set SEMANTIC_SCHOLAR_API_KEY=... --app research-to-deck-worker
+```
+
+If a keyless fallback is ever needed, OpenAlex (`api.openalex.org`) serves the same fields
+(title, abstract, open-access PDF link) without authentication.
