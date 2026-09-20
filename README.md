@@ -6,13 +6,28 @@ POST a research topic → get back a branded PowerPoint deck built from 50+ pape
 
 ## Architecture
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/architecture-light.png">
+  <img alt="Research-to-Deck architecture: browser posts to the Next.js API on Vercel, which writes a jobs row to Postgres and enqueues on Redis; the Fly.io worker searches OpenAlex, fetches open-access PDFs, embeds and reranks with Voyage, synthesizes with Claude, and renders the deck with render_deck.py" src="docs/architecture-light.png">
+</picture>
+
+**[Open the interactive diagram →](docs/research-to-deck-architecture.html)** — a standalone HTML file
+(no build step, no network) with three guided walkthroughs: *Job submission*, *RAG pipeline*, and
+*Deploy split*. Clone the repo and open it in a browser, or preview it on
+[htmlpreview.github.io](https://htmlpreview.github.io/). It has light/dark themes, click-to-trace paths,
+and PNG/SVG export.
+
+<details>
+<summary>Mermaid source (text fallback)</summary>
+
 ```mermaid
 flowchart LR
   U[Browser / curl] -->|POST /api/decks| API[Next.js API on Vercel]
   API -->|insert job| PG[(Postgres + pgvector)]
   API -->|enqueue| R[(Redis / BullMQ)]
   R --> W[Worker on Fly.io<br/>Node + Python]
-  W -->|search| S2[Semantic Scholar API]
+  W -->|search| S2[OpenAlex API]
   W -->|fetch open-access PDFs| PDF[arXiv / publishers]
   W -->|embed + rerank| V[Voyage AI]
   W -->|sub-queries + synthesis| C[Claude API]
@@ -21,6 +36,8 @@ flowchart LR
   U -->|GET /api/decks/:id| API
   U -->|GET /api/decks/:id/download| API
 ```
+
+</details>
 
 | Stage | What happens |
 |---|---|
