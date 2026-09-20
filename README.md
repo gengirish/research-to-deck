@@ -59,7 +59,7 @@ Prerequisites: Node 22+, Python 3.10+ with `python-pptx`, and Docker.
 
 ```bash
 npm install
-pip install python-pptx==1.0.2
+pip install -r python/requirements.txt
 docker compose up -d                 # pgvector on :5433, Redis on :6380
 cp .env.example .env.local           # then fill in the keys
 npm run db:migrate
@@ -73,6 +73,7 @@ npm run worker                       # terminal 2: BullMQ worker
 |---|---|---|
 | `ANTHROPIC_API_KEY` | worker | Claude sub-queries + synthesis |
 | `CLAUDE_MODEL` | worker | optional, default `claude-sonnet-5` |
+| `AI_GATEWAY_API_KEY` | worker | optional. Routes Claude through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) so usage bills to Vercel; takes precedence over `ANTHROPIC_API_KEY` and prefixes the model id with `anthropic/`. Needs paid Vercel credits — the free tier returns `403 RestrictedModelsError` for every Anthropic model |
 | `VOYAGE_API_KEY` | worker | embeddings + reranking |
 | `PAPER_SOURCE` | worker | optional, default `openalex`. Set to `semanticscholar` to use the old provider. |
 | `OPENALEX_MAILTO` | worker | recommended. A contact address, **not** an API key: it opts you into OpenAlex's polite pool (10 req/s, 100k/day) instead of the slower anonymous pool. |
@@ -96,15 +97,25 @@ curl -X POST http://localhost:3000/api/decks \
   -d '{"topic":"retrieval-augmented generation evaluation","paperCount":50}'
 # -> 202 {"jobId":"…","statusUrl":"…/api/decks/…"}
 
-# poll status
+# poll status (and the activity log)
 curl http://localhost:3000/api/decks/<jobId>
-# -> {"status":"running","stage":"ingesting","progress":34,"stats":{…},"downloadUrl":null}
+# -> {"status":"running","stage":"ingesting","progress":34,"stats":{…},
+#     "events":[{"id":7,"stage":"ingesting","level":"info","message":"[13/50] …","detail":{…},"at":"…"}],
+#     "downloadUrl":null}
+
+# only the activity since the last event you saw
+curl "http://localhost:3000/api/decks/<jobId>?since=7"
 
 # download when status is "done"
 curl -o deck.pptx http://localhost:3000/api/decks/<jobId>/download
 ```
 
 `paperCount` is 10–100 (default 50). Stages: `queued → searching → ingesting → retrieving → synthesizing → rendering → done | failed`.
+
+`events` is the job's activity log: one timestamped line per background step the worker
+takes (each paper fetched and how it was read, the embedding pass, the sub-queries, the
+synthesis repair pass, the render). `level` is `info | success | warn | error`. Pass
+`?since=<last id>` to fetch only what is new, which is how the web UI streams it.
 
 Pass an optional `email` to have the finished deck mailed to you instead of polling:
 
@@ -162,16 +173,37 @@ Live: **https://research-to-deck.vercel.app** (app on Vercel, worker on Fly.io).
 3. **Worker:** `fly apps create research-to-deck-worker`, then stage the secrets and deploy the container from `fly.toml` / `Dockerfile.worker`:
 
    ```bash
-   fly secrets import --app research-to-deck-worker --stage < secrets.env   # DATABASE_URL, REDIS_URL,
-                                                                           # VOYAGE_API_KEY, ANTHROPIC_API_KEY,
-                                                                           # CLAUDE_MODEL, PYTHON_BIN=python3
+   # secrets.env: DATABASE_URL, REDIS_URL, VOYAGE_API_KEY, ANTHROPIC_API_KEY,
+   #              PYTHON_BIN=python3, and optionally CLAUDE_MODEL, OPENALEX_MAILTO,
+   #              AGENTMAIL_API_KEY, APP_BASE_URL
+   fly secrets import --app research-to-deck-worker --stage < secrets.env
    fly deploy --app research-to-deck-worker --remote-only --ha=false
    fly logs --app research-to-deck-worker        # expect: [worker] listening on queue "decks"
    ```
 
-4. **App:** `vercel link` then `vercel deploy --prod`. The app only needs `DATABASE_URL` and `REDIS_URL`, both injected by the two integrations; the AI keys live on the worker alone.
+   `fly secrets set` restarts the machine on its own, so changing a key needs no redeploy.
 
-Marketplace values are stored as `sensitive` on Vercel, so `vercel env pull` returns them empty. Copy the connection strings out of the Neon and Upstash store pages when you need them locally or on Fly.
+4. **App:** `vercel link` then `vercel deploy --prod`. The app only needs `DATABASE_URL` and `REDIS_URL`, both injected by the two integrations; the AI keys live on the worker alone. Once the project is connected to GitHub, every push to `main` deploys.
+
+Two things that trip people up:
+
+- Marketplace values are stored as `sensitive` on Vercel, so `vercel env pull` returns them **empty**. Copy the connection strings out of the Neon and Upstash store pages when you need them locally or on Fly.
+- The worker reads columns added by later migrations, so run `npm run db:migrate` against the production `DATABASE_URL` before deploying a worker that expects them.
+
+### Verified production run
+
+A 50-paper job through the live URL, end to end in **51s**:
+
+| Metric | Value |
+|---|---|
+| Papers found / ingested | 50 / 50 (24 abstract-only, 1 title-only, 503 chunks) |
+| Retrieved | 28 chunks from 14 papers |
+| Deck | 14 slides (title + 11 content + 2 reference), speaker notes on every slide, 69 KB |
+| Citations | 14 references, 0 citation issues, no repair pass needed |
+| Timings | search 0.4s · retrieve 13.2s · synthesize 31.7s · render 0.8s |
+
+Ingestion was 0s because the papers were already cached from an earlier run; a cold corpus adds a
+few minutes of PDF fetching and embedding.
 
 ## Tests
 
@@ -185,7 +217,7 @@ npm run test:py     # python-pptx renderer: slide count, notes on every slide, c
 
 ```
 src/app/api/decks/            POST create, GET status, GET download
-src/app/page.tsx              topic form + live status
+src/app/page.tsx              topic form + live pipeline timeline and activity console
 src/lib/paper.ts              provider-agnostic Paper shape + content-first selection
 src/lib/paperSearch.ts        provider router (PAPER_SOURCE) + display label
 src/lib/openAlex.ts           OpenAlex client (throttle, backoff, inverted-abstract rebuild)
@@ -204,7 +236,7 @@ src/lib/agentmailWebhook.ts   Svix signature verification + inbound parsing
 src/app/api/webhooks/         inbound AgentMail webhook
 worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
-db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery)
+db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log)
 ```
 
 ### Paper search provider

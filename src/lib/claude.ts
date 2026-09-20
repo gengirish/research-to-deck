@@ -3,10 +3,20 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { env } from "./env";
 
+const AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
+
 let client: Anthropic | undefined;
 function getClient(): Anthropic {
-  client ??= new Anthropic();
+  const gatewayKey = env.aiGatewayApiKey;
+  client ??= gatewayKey ? new Anthropic({ apiKey: gatewayKey, baseURL: AI_GATEWAY_BASE_URL }) : new Anthropic();
   return client;
+}
+
+/** The gateway namespaces models by provider; the Anthropic API does not. */
+function modelId(): string {
+  const model = env.claudeModel;
+  if (!env.aiGatewayApiKey || model.includes("/")) return model;
+  return `anthropic/${model}`;
 }
 
 /**
@@ -21,7 +31,7 @@ export async function claudeJson<S extends z.ZodType>(opts: {
   maxTokens?: number;
 }): Promise<z.infer<S>> {
   const response = await getClient().messages.parse({
-    model: env.claudeModel,
+    model: modelId(),
     max_tokens: opts.maxTokens ?? 16_000,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],

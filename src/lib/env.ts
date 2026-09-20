@@ -32,6 +32,13 @@ export const env = {
   get claudeModel() {
     return process.env.CLAUDE_MODEL || "claude-sonnet-5";
   },
+  /**
+   * Vercel AI Gateway key. When set, Claude calls route through the gateway and are
+   * billed to Vercel instead of Anthropic; `ANTHROPIC_API_KEY` is then unnecessary.
+   */
+  get aiGatewayApiKey(): string | undefined {
+    return process.env.AI_GATEWAY_API_KEY || undefined;
+  },
   get pythonBin() {
     return process.env.PYTHON_BIN || "python";
   },

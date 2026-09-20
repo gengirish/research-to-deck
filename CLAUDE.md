@@ -18,6 +18,12 @@ npm run test:py                # unittest over python/test_*.py (needs python-pp
 python -m unittest python.test_render_deck.ClassName.test_name   # single python test
 
 npm run smoke -- http://localhost:3000 "some topic" 50   # full end-to-end, writes smoke-deck.pptx
+
+# deploy (see README "Deploy" for first-time setup)
+fly deploy --app research-to-deck-worker --remote-only --ha=false
+fly logs --app research-to-deck-worker                   # [worker] listening on queue "decks"
+fly secrets set KEY=value --app research-to-deck-worker  # restarts the machine, no redeploy needed
+vercel deploy --prod                                     # app; a push to main also deploys
 ```
 
 Both `dev` and `worker` need `.env.local` (see `.env.example` and the env table in README.md).
@@ -27,8 +33,13 @@ Both `dev` and `worker` need `.env.local` (see `.env.example` and the env table 
 `POST /api/decks` only writes a `jobs` row and enqueues a BullMQ job; everything expensive runs in
 `worker/index.ts` → `src/lib/pipeline.ts`. The app and the worker share `src/lib/*` and the same
 Postgres + Redis, but deploy separately: **app → Vercel, worker → a container (`Dockerfile.worker`)
-on Railway/Render/Fly**, because a 50-paper job runs for minutes and shells out to Python. Never
-move pipeline work into a route handler.
+on Fly.io** (Railway or Render work the same way), because a 50-paper job runs for minutes and shells
+out to Python. Never move pipeline work into a route handler.
+
+Live deployment: app at https://research-to-deck.vercel.app (auto-deploys on push to `main`), worker
+as Fly app `research-to-deck-worker`, Neon Postgres and Upstash Redis provisioned through the Vercel
+Marketplace. Marketplace env values are `sensitive`, so `vercel env pull` returns them empty — copy
+connection strings from the store pages instead.
 
 `runDeckJob` is the single source of truth for stages (`searching → ingesting → retrieving →
 synthesizing → rendering → done`), progress percentages, and the `stats`/`timings` JSON. Any new
@@ -75,6 +86,8 @@ not code.
   error, and `runDeckJob` checks credentials up front before minutes of downloads.
 - Claude calls go through `claudeJson` (`src/lib/claude.ts`) — structured output with a Zod schema,
   explicit handling of refusal/truncation. Model comes from `CLAUDE_MODEL`, default `claude-sonnet-5`.
+  Setting `AI_GATEWAY_API_KEY` swaps the client to the Vercel AI Gateway (`baseURL`) and prefixes the
+  model id with `anthropic/`; unset, it calls Anthropic directly with `ANTHROPIC_API_KEY`.
 - `pg`, `bullmq`, and `ioredis` are in `serverExternalPackages`; the Pool and Queue are cached on
   `globalThis` to survive dev hot reload.
 

@@ -64,6 +64,12 @@ by a 24-hour result cache. All requests are throttled to a maximum of one per se
 
 If usage ever grows beyond a demo, update the volume answer before asking for a higher limit.
 
+## Outcome
+
+The project shipped on OpenAlex instead (no key, no approval queue), and a 50-paper run through
+the live URL completed end to end in 51s. The application is left in place in case the key is
+granted later: `PAPER_SOURCE=semanticscholar` switches the provider back with no code change.
+
 ## When the key arrives
 
 ```bash
