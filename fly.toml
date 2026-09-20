@@ -1,0 +1,14 @@
+# BullMQ worker on Fly.io. No HTTP service: it only consumes the Redis queue.
+app = "research-to-deck-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[processes]
+  worker = "node --import tsx worker/index.ts"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  processes = ["worker"]

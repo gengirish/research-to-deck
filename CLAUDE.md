@@ -1,0 +1,79 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+npm run dev                    # Next.js app on :3000 (form + API)
+npm run worker                 # BullMQ consumer — the app does no pipeline work without it
+docker compose up -d           # local pgvector on :5433, Redis on :6380
+npm run db:migrate             # apply db/migrations/*.sql (idempotent, safe to re-run)
+
+npm run typecheck && npm run lint
+npm test                       # vitest, tests/**/*.test.ts
+npx vitest run tests/chunk.test.ts            # single file
+npx vitest run -t "reference numbering"       # single test by name
+npm run test:py                # unittest over python/test_*.py (needs python-pptx)
+python -m unittest python.test_render_deck.ClassName.test_name   # single python test
+
+npm run smoke -- http://localhost:3000 "some topic" 50   # full end-to-end, writes smoke-deck.pptx
+```
+
+Both `dev` and `worker` need `.env.local` (see `.env.example` and the env table in README.md).
+
+## Architecture
+
+`POST /api/decks` only writes a `jobs` row and enqueues a BullMQ job; everything expensive runs in
+`worker/index.ts` → `src/lib/pipeline.ts`. The app and the worker share `src/lib/*` and the same
+Postgres + Redis, but deploy separately: **app → Vercel, worker → a container (`Dockerfile.worker`)
+on Railway/Render/Fly**, because a 50-paper job runs for minutes and shells out to Python. Never
+move pipeline work into a route handler.
+
+`runDeckJob` is the single source of truth for stages (`searching → ingesting → retrieving →
+synthesizing → rendering → done`), progress percentages, and the `stats`/`timings` JSON. Any new
+stage belongs there plus in the `JobStage` union in `src/lib/jobs.ts` and the migration comment.
+
+Data model (`db/migrations/001_init.sql`): `papers` + `chunks` are **global and reused across jobs**
+(the ingestion cache — re-ingesting a paper is a no-op), while `job_papers` scopes a job's retrieval
+set. The finished `.pptx` lives in `jobs.deck` (BYTEA), so there is no blob store; the download route
+streams it straight out.
+
+### Invariants worth preserving
+
+- **Citation contract.** Claude may only cite `P1…Pn` keys from the retrieved set. `validateDeck`
+  (`src/lib/citations.ts`) strips unknown keys, drops uncited bullets, and returns an `issues` list;
+  `synthesizeDeck` then gives Claude exactly one repair pass and keeps whichever draft needed fewer
+  fixes. A bullet without a valid citation must never reach the deck.
+- **Count limits** (8–12 slides, 3–5 bullets) live in `DECK_RULES`, not in the Zod schema — the
+  schema stays loose so a near-miss can be repaired instead of rejected. Change them in one place.
+- **Retrieval scoping.** The vector query in `src/lib/retrieval.ts` uses a `MATERIALIZED` CTE to force
+  an exact scan over the job's chunks; a filtered HNSW scan silently returns fewer than k rows once
+  the table is large. Keep the CTE. `diversify` caps any one paper at 3 of the final 30 chunks.
+- **Embeddings are `voyage-3.5` at 1024 dims**, hard-coded in the `vector(1024)` column. Switching
+  models needs a migration, not just a constant.
+- **Every paper gets a title+abstract chunk**, so papers without an open-access PDF degrade to
+  abstract-only rather than disappearing (`content_source` records which).
+- **Reference numbers are assigned in order of first appearance** in `toRenderDeck`, and only cited
+  papers appear on the reference slides.
+
+### Node ↔ Python boundary
+
+`src/lib/render.ts` spawns `$PYTHON_BIN python/render_deck.py <out.pptx>` and pipes the `RenderDeck`
+JSON on stdin. That interface — the `RenderDeck` type in `src/lib/deckSchema.ts` and the JSON
+`render_deck.py` reads — is the contract; change both sides together and update
+`python/test_render_deck.py`. Visual styling (colors, fonts, sizes) is data in `python/brand.json`,
+not code.
+
+### Conventions
+
+- ESM throughout (`"type": "module"`), run via `tsx`; imports inside `src/lib` are relative, route
+  handlers use the `@/` alias.
+- All outbound HTTP goes through `fetchWithRetry` / `mapWithConcurrency` in `src/lib/http.ts`
+  (timeout, backoff, `Retry-After`). Don't call bare `fetch` for external APIs.
+- Env vars are read lazily via the getters in `src/lib/env.ts` so missing keys fail with a named
+  error, and `runDeckJob` checks credentials up front before minutes of downloads.
+- Claude calls go through `claudeJson` (`src/lib/claude.ts`) — structured output with a Zod schema,
+  explicit handling of refusal/truncation. Model comes from `CLAUDE_MODEL`, default `claude-sonnet-5`.
+- `pg`, `bullmq`, and `ioredis` are in `serverExternalPackages`; the Pool and Queue are cached on
+  `globalThis` to survive dev hot reload.
