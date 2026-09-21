@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Blueprint } from "./Blueprint";
+import ThemeSwitch from "./ThemeSwitch";
 
 /**
  * Frame around Clerk's <SignIn />/<SignUp /> widgets so the auth pages read as part
@@ -25,6 +26,7 @@ export default function AuthShell({
           <span className="mark">IntelliForge</span>
           <span className="sub">Research / Deck</span>
         </div>
+        <ThemeSwitch />
         <Link href="/">Back to the brief</Link>
       </header>
       <div className="rule" />

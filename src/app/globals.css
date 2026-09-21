@@ -252,6 +252,16 @@ figure { margin: 0; }
 .seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
+/* The theme switch: the same .seg control, as three square icon cells. Each is a
+   full 44px target; the labels are visually hidden, not absent. */
+.theme-switch { margin: 0; padding: 0; border: 0; min-width: 0; }
+.seg-icon {
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.seg-icon svg { display: block; flex: none; }
+
 /* — tags — */
 .tag {
   display: inline-flex;

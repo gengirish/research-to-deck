@@ -1,6 +1,6 @@
 /* Dark theme layer — Phase 5.
-   Imported after globals.css so `@media (prefers-color-scheme: dark) { :root { … } }`
-   redefines the semantic tokens. Redefine tokens, not components: anything that reads
+   Imported after globals.css, so the dark token block below redefines the semantic
+   tokens. Redefine tokens, not components: anything that reads
    var(--color-…) then follows automatically.
 
    Method (docs/ui-ux-improvement-plan.md §Phase 5, MASTER.md §2.1/§2.2):
@@ -18,8 +18,20 @@
    - Three places need a scope rather than a token, and only three; they are listed
      with their reasons below. */
 
+/* Three states, two selectors, one set of values.
+
+   System — no data-theme on <html>: the media query decides, so the page follows the
+            OS and changes with it live, with no script involved.
+   Dark   — data-theme="dark": applied regardless of the OS.
+   Light  — data-theme="light": the media query is excluded by :not(), and the light
+            :root in globals.css stands.
+
+   CSS cannot put a media query and an attribute selector in one selector list, so the
+   token block appears twice. It is the same block — scripts/check-contrast.mjs parses
+   both and fails the build if they ever differ, so they cannot drift. */
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Tells the UA to render form controls, scrollbars and the caret dark, so the
        parts of the page we do not paint follow the parts we do. */
     color-scheme: dark;
@@ -68,4 +80,60 @@
     --shadow-md: 0 3px 10px color-mix(in srgb, #000000 62%, transparent);
     --shadow-lg: 0 12px 32px color-mix(in srgb, #000000 70%, transparent);
   }
+}
+
+:root[data-theme="dark"] {
+  /* Tells the UA to render form controls, scrollbars and the caret dark, so the
+     parts of the page we do not paint follow the parts we do. */
+  color-scheme: dark;
+
+  --color-bg: #14191e;
+  --color-surface: #1d242b;
+  --color-text: #e6e9ec;
+  --color-accent: #6e93b8;
+  /* 1.88 : 1 against the ground — the light divider sits at 1.38 : 1, so hairlines
+     are, if anything, easier to see here than they are on paper. */
+  --color-divider: color-mix(in srgb, #e6e9ec 22%, transparent);
+
+  /* Neutral ramp, darkest step first. -500 (2.90 : 1) and -600 (4.22 : 1) still
+     fail AA against the ground on purpose: they remain decoration tokens in both
+     themes, and check-contrast.mjs asserts that they keep failing. */
+  --color-neutral-100: #1b2026;
+  --color-neutral-200: #232930;
+  --color-neutral-300: #2e353d;
+  --color-neutral-400: #3c444d;
+  --color-neutral-500: #5a636d;
+  --color-neutral-600: #737d87;
+  --color-neutral-700: #a6afb8;
+  --color-neutral-800: #c7ced5;
+  --color-neutral-900: #e4e9ed;
+
+  /* --color-text-muted is declared as var(--color-neutral-700) in globals.css, so
+     it re-resolves here on its own. 7.95 : 1 — the muted-text floor holds. */
+
+  /* Accent ramp, darkest step first. -700 is the link / primary-button tone at
+     9.03 : 1; -100 is the tint ground under .tag-accent, .notice and .thumb-on. */
+  --color-accent-100: #18242f;
+  --color-accent-200: #1f2d3a;
+  --color-accent-300: #2a3c4c;
+  --color-accent-400: #3b5164;
+  --color-accent-500: #56748f;
+  --color-accent-600: #6b8fb0;
+  --color-accent-700: #9cbddc;
+  --color-accent-800: #bcd5ee;
+  --color-accent-900: #dcebf9;
+
+  /* The shadow tokens are tuned for a paper ground; a 14%-of-graphite shadow is
+     invisible on graphite. Kept subordinate to the hairline, per MASTER.md §2.1
+     ("hairlines, never shadows") — these only stop a raised sheet from floating
+     with no edge at all. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #000000 55%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #000000 62%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #000000 70%, transparent);
+}
+
+/* Forcing light while the OS is dark: without this the <meta name="color-scheme"
+   content="light dark"> tells the UA it may draw form controls and scrollbars dark. */
+:root[data-theme="light"] {
+  color-scheme: light;
 }

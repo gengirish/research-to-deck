@@ -8,6 +8,7 @@ import "./theme-dark.css";
 import "./motion.css";
 import "./states.css";
 import PWA from "./pwa";
+import { PRE_PAINT_SCRIPT } from "@/components/theme";
 
 // The Industry design system pairs Barlow Condensed headings over Barlow body
 // text. Loading them here binds them to the --font-* tokens globals.css reads.
@@ -40,9 +41,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // One theme colour per scheme, matching --color-bg in globals.css and in the
-  // `prefers-color-scheme: dark` block of theme-dark.css, so the browser chrome and
-  // the PWA status bar sit flush with the page ground in both themes.
+  // One theme colour per scheme, matching --color-bg in globals.css and theme-dark.css,
+  // so the browser chrome sits flush with the page ground. These follow the OS; when
+  // the user forces a theme, ThemeSwitch repoints them (see theme.ts).
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f2f2f3" },
     { media: "(prefers-color-scheme: dark)", color: "#14191e" },
@@ -56,7 +57,14 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+      {/* suppressHydrationWarning: the pre-paint script sets data-theme on <html>
+          before React hydrates, so the attribute legitimately differs from the server
+          HTML. It applies to this element's own attributes only, not its children. */}
+      <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`} suppressHydrationWarning>
+        <head>
+          {/* Must run before first paint, or a stored "dark" flashes light for a frame. */}
+          <script dangerouslySetInnerHTML={{ __html: PRE_PAINT_SCRIPT }} />
+        </head>
         <body>
           {children}
           <PWA />

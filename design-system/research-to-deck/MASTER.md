@@ -72,7 +72,46 @@ Semantic tokens. Components reference these, never a literal.
 | Hairline | `--color-divider` | `color-mix(in srgb, #1d1f20 16%, transparent)` | |
 
 Neutral ramp `--color-neutral-100…900` (`#f5f5f8` → `#2b2b2d`) and accent ramp
-`--color-accent-100…900` (`#eef6ff` → `#1d2d3d`) exist for tints and the reversed field.
+`--color-accent-100…900` (`#eef6ff` → `#1d2d3d`) exist for tints and filled states.
+
+### 2.1a Theme selection — Light / System / Dark
+
+The user picks one of three; **System is the default and stores nothing**.
+
+| Choice | `<html data-theme>` | `localStorage.theme` | Who decides |
+|---|---|---|---|
+| System | *(absent)* | *(absent)* | the `prefers-color-scheme` media query, live |
+| Light | `light` | `light` | the user, overriding the OS |
+| Dark | `dark` | `dark` | the user, overriding the OS |
+
+How it is built, and why each piece exists:
+
+- **The dark tokens appear twice** in `theme-dark.css` — under
+  `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` for System,
+  and under `:root[data-theme="dark"]` for Dark — because CSS cannot put a media query
+  and an attribute selector in one selector list. Two copies of one block is only safe
+  if they are provably identical, so `check-contrast.mjs` **fails the build if they
+  drift**.
+- **`:root[data-theme="light"] { color-scheme: light }`**. Without it, forcing Light on a
+  dark OS leaves the UA free to draw form controls and scrollbars dark, because the
+  `color-scheme` meta says both are supported.
+- **A pre-paint script** inline in `<head>` sets `data-theme` before first paint.
+  Without it a stored Dark renders light for a frame and then flashes. `<html>` carries
+  `suppressHydrationWarning` for exactly that one attribute.
+- **`useSyncExternalStore`**, not `useState` + `useEffect`: the preference lives in
+  `localStorage`, which the server cannot see. The server renders System; React swaps in
+  the real value after hydration without a mismatch.
+- **The browser chrome follows a forced theme.** Next emits one `theme-color` meta per
+  scheme behind a media query; a forced choice repoints them, System restores them.
+- **Every storage access is guarded.** Private windows and sandboxed frames throw on
+  `localStorage`; the switch still applies the theme for the view, and falls back to
+  System.
+- **Tabs stay in step.** A choice in one tab repaints the others via the `storage` event.
+
+The control is `ThemeSwitch` — the existing `.seg` component as three 44×44 icon cells.
+Real radios in a `<fieldset>`: one tab stop, arrow keys between options, one announced
+state. The labels are visually hidden, not absent, so they are what a screen reader
+reads and a translator translates.
 
 ### 2.2 Contrast law (non-negotiable)
 
@@ -89,18 +128,13 @@ after any token change.
 | `--color-accent` `#5980a6` | 3.71 : 1 | **Non-text only** — rules, meters, dots, focus rings |
 | `--color-neutral-600` `#7a7a7d` | 3.82 : 1 | **Non-text only** |
 | `--color-neutral-500` `#98989b` | 2.57 : 1 | **Never for text** |
-| `--color-accent-300` on `--color-accent-900` | 9.57 : 1 | The reversed field |
 
-Dark clears the same law with room to spare (body 14.51, muted floor 7.95, links and the
-primary button 9.03, accent as non-text UI 5.50, reversed field 10.22 / 6.62). Both ramps
+Dark clears the same law with room to spare (body 14.51, muted floor 7.95, links, the primary button
+and the selected segment 9.03, accent as non-text UI 5.50). Both ramps
 **run the other way round in dark** — `-100` is the quietest near-ground step and `-900`
 the brightest — which is what lets every existing pairing in `globals.css` keep its
 meaning without touching a component.
 
-`.reverse` is the exception: it is an inverted island whose children hard-code paper
-tints, so flipping the ramp globally would collapse it to ~1.1 : 1. In dark it carries
-**local copies** of the four tokens it paints with. No `globals.css` declaration is
-overridden; the same `var()`s just resolve differently inside the island.
 
 Rules that follow from the table:
 
@@ -280,11 +314,6 @@ Header: `11px`, `0.08em`, uppercase, `--color-text-muted`, hairline under.
 Rows: hairline under at 8% text, `:hover` at 4%. Numeric columns tabular.
 Sortable columns must expose `aria-sort`.
 
-### 3.8 Reversed field — `.reverse`
-
-`--color-accent-900` ground, `--color-bg` type, `--color-accent-300` accents. Used for the
-verifiability section and the closing CTA. Optional `.hatch` 45° hairline texture. Contrast
-inside the reversed field is verified separately — light-mode values do not carry over.
 
 ---
 
@@ -380,6 +409,7 @@ Universal (from the generator's list, all still apply):
 **Both themes**
 
 - [ ] Verified in light *and* dark; light values never assumed to carry over
+- [ ] Checked under all three choices — System on a light OS and a dark OS, Light, Dark
 - [ ] `scripts/check-contrast.mjs` passes for both
 - [ ] Anything painted with a literal rather than a token will not follow the theme —
       there should be none

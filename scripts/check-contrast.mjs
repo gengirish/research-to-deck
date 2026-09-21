@@ -80,13 +80,34 @@ const globals = await readFile(GLOBALS, "utf8");
 const themeDark = await readFile(THEME_DARK, "utf8");
 
 const light = { name: "light  (globals.css :root)", root: readBlock(globals, ":root"), scopes: {} };
-const darkRoot = readBlock(themeDark, ":root");
-if (!darkRoot) {
-  console.error("No `:root` block in src/app/theme-dark.css — the dark theme is not being declared.");
+
+/*
+ * The dark tokens are declared twice — once under the OS media query for "System",
+ * once under [data-theme="dark"] for the explicit override — because CSS cannot put a
+ * media query and an attribute selector in one selector list. Two copies of one block
+ * is only safe if they are provably the same block, so that is asserted here first.
+ */
+const darkSystem = readBlock(themeDark, ':root:not([data-theme="light"])');
+const darkForced = readBlock(themeDark, ':root[data-theme="dark"]');
+if (!darkSystem || !darkForced) {
+  console.error(
+    "theme-dark.css must declare the dark tokens under both " +
+      '`:root:not([data-theme="light"])` (System) and `:root[data-theme="dark"]` (Dark).',
+  );
   process.exit(1);
 }
+const drift = [...new Set([...Object.keys(darkSystem), ...Object.keys(darkForced)])].filter(
+  (t) => darkSystem[t] !== darkForced[t],
+);
+if (drift.length) {
+  console.error("The System and Dark token blocks in theme-dark.css have drifted apart:");
+  for (const t of drift) console.error(`  ${t}: system=${darkSystem[t] ?? "(missing)"}  dark=${darkForced[t] ?? "(missing)"}`);
+  process.exit(1);
+}
+console.log(`dark token blocks identical (${Object.keys(darkForced).length} tokens, System and Dark)`);
+const darkRoot = darkForced;
 const dark = {
-  name: "dark   (theme-dark.css @media prefers-color-scheme: dark)",
+  name: "dark   (theme-dark.css — System when the OS is dark, and Dark)",
   // Dark redefines a subset; everything it does not name still comes from globals.
   root: { ...light.root, ...darkRoot },
   scopes: {},

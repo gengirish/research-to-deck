@@ -6,6 +6,7 @@ import EntryView from "@/components/EntryView";
 import HandoffView from "@/components/HandoffView";
 import ResultView from "@/components/ResultView";
 import RunningView from "@/components/RunningView";
+import ThemeSwitch from "@/components/ThemeSwitch";
 import { formatDuration, JobEvent, JobStatus } from "@/components/deck";
 
 const REPO = "https://github.com/gengirish/research-to-deck";
@@ -158,6 +159,7 @@ export default function Home() {
         <span className="tag tag-outline" style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 12 }}>
           Beta
         </span>
+        <ThemeSwitch />
         <div className="nav-auth">
           {/* Core 3 removed <SignedIn>/<SignedOut>; the hook we already read covers this,
               and gating on `authLoaded` keeps the header from flickering on first paint. */}
