@@ -91,8 +91,10 @@ npm run worker                       # terminal 2: BullMQ worker
 | `AGENTMAIL_INBOX_ID` | app + worker | optional. Reuse an existing inbox (an address) instead of creating one. Required when the account is at its plan inbox limit |
 | `AGENTMAIL_WEBHOOK_SECRET` | app | `whsec_…` Svix secret; required only for inbound email. Leave unset for outbound-only |
 | `APP_BASE_URL` | app + worker | public origin for the download/status links inside emails, and the sign-up link in "no account" email replies |
-| `STRIPE_SECRET_KEY` | app | optional. Unset means billing is off and runs are unlimited. Set, it turns on credits (see [Billing](#billing-stripe)) |
-| `STRIPE_WEBHOOK_SECRET` | app | `whsec_…` for `POST /api/webhooks/stripe`. Required once `STRIPE_SECRET_KEY` is set, or purchases never grant credits |
+| `DODO_PAYMENTS_API_KEY` | app | optional. Unset means billing is off and runs are unlimited. Set, it turns on credits (see [Billing](#billing-dodo-payments)) |
+| `DODO_PAYMENTS_WEBHOOK_KEY` | app | `whsec_…` for `POST /api/webhooks/dodo`. Required once the API key is set, or purchases never grant credits |
+| `DODO_PAYMENTS_ENVIRONMENT` | app | `test_mode` (default) or `live_mode`; must match the key |
+| `DODO_PRODUCT_SINGLE` / `_STARTER` / `_PRO` | app | Dodo product ids (`pdt_…`) for the three credit packs |
 
 ## API
 
@@ -186,13 +188,17 @@ Run the whole flow end to end and save the deck to `smoke-deck.pptx`:
 SMOKE_COOKIE="__session=..." npm run smoke -- http://localhost:3000 "retrieval-augmented generation evaluation" 50
 ```
 
-## Billing (Stripe)
+## Billing (Dodo Payments)
 
-Billing is optional. With `STRIPE_SECRET_KEY` unset, every run is free, and the `/billing` page
+Billing is optional. With `DODO_PAYMENTS_API_KEY` unset, every run is free, and the `/billing` page
 says so.
 
+Payments go through [Dodo Payments](https://dodopayments.com) rather than Stripe, because Stripe onboarding is
+invite-only for Indian businesses. Dodo is the **merchant of record**: it takes cards from buyers worldwide in
+USD, adds and remits sales tax / VAT for the buyer's country, and pays out to an Indian bank account.
+
 **Credits.** One credit is one deck run. A new account starts with **1 free credit**, then buys packs
-through Stripe Checkout:
+(prices before tax):
 
 | Pack | Price | Per deck |
 |---|---|---|
@@ -200,8 +206,8 @@ through Stripe Checkout:
 | 5 decks | $49 | $9.80 |
 | 20 decks | $149 | $7.45 |
 
-The price list is `CREDIT_PACKS` in [src/lib/billing.ts](src/lib/billing.ts) and nowhere else. Checkout uses
-inline `price_data`, so no products need creating in Stripe.
+The price list is `CREDIT_PACKS` in [src/lib/billing.ts](src/lib/billing.ts). Dodo has no inline pricing, so each
+pack is also a one-time product in the Dodo dashboard, named by `DODO_PRODUCT_*`. Change a price in both places.
 
 - `POST /api/decks` spends the credit and creates the job **in one transaction**. It answers `402` with
   `{"error", "balance": 0, "billingUrl": "/billing"}` when the balance is empty. The balance is debited with a
@@ -210,7 +216,9 @@ inline `price_data`, so no products need creating in Stripe.
   claimed by `jobs.credit_refunded_at`.
 - `credit_ledger` records every change (`free_grant`, `purchase`, `deck`, `refund`). Its sum always equals
   the balance.
-- The webhook grants credits keyed on the Checkout session id, so Stripe's redeliveries grant nothing.
+- The webhook grants credits on `payment.succeeded`, keyed on the Dodo payment id (`credit_ledger.payment_ref`),
+  so redeliveries grant nothing. The user id and credit count come from checkout-session metadata, which Dodo
+  copies onto the payment and only this server can set.
 
 **Custom branding is the paid feature.** After a first purchase, `/billing` lets an account set its deck name,
 footer, three colors and a PNG/JPEG logo (≤512 KB, checked by file signature). The brand is fixed when the
@@ -221,24 +229,25 @@ Fonts and text colors stay the defaults.
 is a *verified* email on a Clerk account with credit. That account is charged, and the job stays ownerless so
 the emailed link still works. Other senders get a reply pointing them at sign-up or `/billing`.
 
-Set it up:
+Set it up (do it in **test mode** first; test and live have separate keys, products and webhooks):
 
-1. Stripe dashboard → Developers → Webhooks → add endpoint `https://<app>/api/webhooks/stripe` with events
-   `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy its signing secret.
-2. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` on the **Vercel** project (the worker needs neither).
-3. Run `npm run db:migrate` against production **before** deploying the app: the job routes read the columns
-   added by `006_billing.sql`.
-
-Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints a `whsec_…` to use, and
-card `4242 4242 4242 4242` completes a test checkout.
+1. Dodo dashboard → Products → create three **one-time** products priced $15, $49 and $149 (USD). Copy their
+   `pdt_…` ids into `DODO_PRODUCT_SINGLE`, `DODO_PRODUCT_STARTER` and `DODO_PRODUCT_PRO`.
+2. Developer → API keys → create a key for `DODO_PAYMENTS_API_KEY`.
+3. Developer → Webhooks → add endpoint `https://<app>/api/webhooks/dodo`, subscribed to `payment.succeeded`.
+   Copy its signing secret into `DODO_PAYMENTS_WEBHOOK_KEY`.
+4. Set all six variables (plus `DODO_PAYMENTS_ENVIRONMENT`) on the **Vercel** project and redeploy. The worker
+   needs none of them.
+5. Run `npm run db:migrate` against production **before** deploying: `007_payment_ref.sql` renames the ledger's
+   idempotency column.
 
 | Route | Rule |
 |---|---|
 | `GET /api/billing` | session; balance, paid flag, packs |
-| `POST /api/billing/checkout` | session; `{packId}` → `{url}` of a Checkout session |
+| `POST /api/billing/checkout` | session; `{packId}` → `{url}` of a Dodo checkout session |
 | `GET/PUT/DELETE /api/brand` | session; `PUT` is multipart and answers `402` before a first purchase |
 | `GET /api/brand/logo` | session; your own logo, for the preview |
-| `POST /api/webhooks/stripe` | no session; authenticated by its Stripe signature |
+| `POST /api/webhooks/dodo` | no session; authenticated by its Standard Webhooks signature |
 
 ## Authentication (Clerk)
 
@@ -343,12 +352,12 @@ src/app/api/webhooks/         inbound AgentMail webhook
 worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
 src/lib/billing.ts            credit packs, balance, charge/refund/grant (transactions)
-src/lib/stripe.ts             Stripe client, Checkout params, session → purchase (app only)
+src/lib/dodo.ts               Dodo Payments checkout, payment event → purchase (app only)
 src/lib/brand.ts              brand validation, storage, brand.json overlay
 src/lib/clerkUsers.ts         verified-email → Clerk user, for paid email jobs
 src/app/billing/              credits + brand page
 src/app/api/billing, brand/   credits, checkout, brand CRUD
-src/app/api/webhooks/stripe/  Stripe webhook
+src/app/api/webhooks/dodo/    Dodo Payments webhook
 db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json, job owner, billing)
 ```
 

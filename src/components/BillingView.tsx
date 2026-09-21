@@ -31,7 +31,7 @@ const DEFAULT_BRAND = { name: "", footer: "", primary: "#7C3AED", accent: "#06B6
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
 
-/** `checkout` is Stripe's return flag from the success / cancel URL. */
+/** `checkout` is the return flag on the checkout's return / cancel URL. */
 export default function BillingView({ checkout }: { checkout?: string }) {
   const { isLoaded, isSignedIn } = useAuth();
   const [billing, setBilling] = useState<BillingState | null>(null);
@@ -140,7 +140,7 @@ export default function BillingView({ checkout }: { checkout?: string }) {
 
         {checkout === "success" && (
           <p className="notice" role="status">
-            Payment received. Credits appear here within a few seconds of Stripe confirming it.
+            Back from checkout. If the payment went through, your credits appear here within a few seconds.
           </p>
         )}
         {checkout === "cancelled" && (
@@ -206,7 +206,7 @@ export default function BillingView({ checkout }: { checkout?: string }) {
                       ))}
                     </tbody>
                   </table>
-                  <p className="field-help">Payments by Stripe. Any purchase also unlocks custom deck branding below.</p>
+                  <p className="field-help">Payments by Dodo Payments, in USD. Sales tax or VAT for your country is added at checkout. Any purchase also unlocks custom deck branding below.</p>
                 </>
               ) : (
                 <p className="auth-blurb">Billing is off on this deployment, so runs are unlimited.</p>

@@ -4,11 +4,11 @@ import { createJob, type JobDelivery } from "./jobs";
 
 /**
  * Credits: one credit buys one deck run. Billing is enforced only when
- * STRIPE_SECRET_KEY is set; without it every run is free and unlimited, which is how
- * local development and the existing deployment keep working unchanged.
+ * DODO_PAYMENTS_API_KEY is set; without it every run is free and unlimited, which is
+ * how local development and the existing deployment keep working unchanged.
  */
 export function isBillingEnabled(): boolean {
-  return Boolean(env.stripeSecretKey);
+  return Boolean(env.dodoApiKey);
 }
 
 /** Credits every new account starts with, so the first deck needs no card. */
@@ -18,11 +18,14 @@ export interface CreditPack {
   id: string;
   label: string;
   credits: number;
-  /** USD cents, charged through Stripe Checkout with an inline price. */
+  /** USD cents, before any sales tax Dodo adds for the buyer's country. */
   amountCents: number;
 }
 
-/** The whole price list. Changing a price here is the only step; Stripe needs no products. */
+/**
+ * The whole price list. Each pack is also a one-time product in the Dodo dashboard
+ * (see PACK_PRODUCT_ENV in src/lib/dodo.ts); change a price in both places.
+ */
 export const CREDIT_PACKS: readonly CreditPack[] = [
   { id: "single", label: "1 deck", credits: 1, amountCents: 1500 },
   { id: "starter", label: "5 decks", credits: 5, amountCents: 4900 },
@@ -115,24 +118,25 @@ export async function refundJob(jobId: string): Promise<boolean> {
 }
 
 export interface Purchase {
-  sessionId: string;
+  /** The payment provider's id for this payment; granting is idempotent on it. */
+  paymentRef: string;
   userId: string;
   credits: number;
   amountCents: number;
 }
 
 /**
- * Credits a completed Checkout session. Stripe delivers webhooks at least once, so the
- * ledger's unique `stripe_session_id` decides: a redelivery inserts nothing and grants
- * nothing. Returns whether this call did the grant.
+ * Credits a completed payment. Webhooks are delivered at least once, so the ledger's
+ * unique `payment_ref` decides: a redelivery inserts nothing and grants nothing.
+ * Returns whether this call did the grant.
  */
 export async function grantPurchase(p: Purchase): Promise<boolean> {
   return withTransaction(async (client) => {
     await ensureAccount(client, p.userId);
     const { rowCount } = await client.query(
-      `INSERT INTO credit_ledger (user_id, delta, reason, stripe_session_id, amount_cents)
-       VALUES ($1, $2, 'purchase', $3, $4) ON CONFLICT (stripe_session_id) DO NOTHING`,
-      [p.userId, p.credits, p.sessionId, p.amountCents],
+      `INSERT INTO credit_ledger (user_id, delta, reason, payment_ref, amount_cents)
+       VALUES ($1, $2, 'purchase', $3, $4) ON CONFLICT (payment_ref) DO NOTHING`,
+      [p.userId, p.credits, p.paymentRef, p.amountCents],
     );
     if (rowCount !== 1) return false;
     await client.query(

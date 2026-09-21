@@ -62,13 +62,19 @@ export const env = {
   get agentMailWebhookSecret(): string | undefined {
     return process.env.AGENTMAIL_WEBHOOK_SECRET || undefined;
   },
-  // --- Stripe (optional: without a secret key billing is off and runs are unlimited) ---
-  get stripeSecretKey(): string | undefined {
-    return process.env.STRIPE_SECRET_KEY || undefined;
+  // --- Dodo Payments (optional: without an API key billing is off and runs are unlimited) ---
+  get dodoApiKey(): string | undefined {
+    return process.env.DODO_PAYMENTS_API_KEY || undefined;
   },
-  /** Signing secret (whsec_...) for POST /api/webhooks/stripe. */
-  get stripeWebhookSecret(): string | undefined {
-    return process.env.STRIPE_WEBHOOK_SECRET || undefined;
+  /** Standard Webhooks signing secret (whsec_...) for POST /api/webhooks/dodo. */
+  get dodoWebhookKey(): string | undefined {
+    return process.env.DODO_PAYMENTS_WEBHOOK_KEY || undefined;
+  },
+  /** Defaults to test mode, so a live key is never charged by accident. */
+  get dodoEnvironment(): "test_mode" | "live_mode" {
+    const raw = (process.env.DODO_PAYMENTS_ENVIRONMENT || "test_mode").trim();
+    if (raw === "test_mode" || raw === "live_mode") return raw;
+    throw new Error(`Invalid DODO_PAYMENTS_ENVIRONMENT: ${raw} (expected "test_mode" or "live_mode")`);
   },
 
   /** Public origin used to build download links inside emails. */

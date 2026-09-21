@@ -1,16 +1,22 @@
-import Stripe from "stripe";
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { verifyWebhookSignature } from "../src/lib/agentmailWebhook";
 import { canUseCustomBrand, CREDIT_PACKS, findPack } from "../src/lib/billing";
-import { checkoutParams, purchaseFromSession } from "../src/lib/stripe";
+import { checkoutBody, PACK_PRODUCT_ENV, productIdFor, purchaseFromEvent } from "../src/lib/dodo";
 
-const session = (over: Partial<Stripe.Checkout.Session>) =>
-  ({
-    id: "cs_test_1",
-    payment_status: "paid",
-    amount_total: 4900,
+const paymentEvent = (data: Record<string, unknown> = {}, type = "payment.succeeded") => ({
+  business_id: "bus_1",
+  type,
+  timestamp: "2026-09-21T10:00:00Z",
+  data: {
+    payload_type: "Payment",
+    payment_id: "pay_1",
+    total_amount: 5341,
+    currency: "USD",
     metadata: { user_id: "user_abc", pack_id: "starter", credits: "5" },
-    ...over,
-  }) as Stripe.Checkout.Session;
+    ...data,
+  },
+});
 
 describe("credit packs", () => {
   it("finds a pack by id and rejects anything else", () => {
@@ -22,6 +28,15 @@ describe("credit packs", () => {
   it("prices bigger packs cheaper per deck", () => {
     const perDeck = CREDIT_PACKS.map((p) => p.amountCents / p.credits);
     expect([...perDeck].sort((a, b) => b - a)).toEqual(perDeck);
+  });
+
+  it("maps every pack to a Dodo product env var", () => {
+    for (const pack of CREDIT_PACKS) expect(PACK_PRODUCT_ENV[pack.id]).toBeTruthy();
+  });
+
+  it("names the missing product variable instead of failing vaguely", () => {
+    delete process.env.DODO_PRODUCT_PRO;
+    expect(() => productIdFor(findPack("pro")!)).toThrow("DODO_PRODUCT_PRO");
   });
 });
 
@@ -37,47 +52,53 @@ describe("canUseCustomBrand", () => {
   });
 });
 
-describe("checkoutParams", () => {
-  it("builds a one-off inline-priced session that carries what the webhook needs", () => {
-    const params = checkoutParams(findPack("starter")!, "user_abc", "https://app.example.com");
-    expect(params.mode).toBe("payment");
-    expect(params.line_items?.[0].price_data?.unit_amount).toBe(4900);
-    expect(params.metadata).toEqual({ user_id: "user_abc", pack_id: "starter", credits: "5" });
-    expect(params.success_url).toBe("https://app.example.com/billing?checkout=success");
-    expect(params.cancel_url).toBe("https://app.example.com/billing?checkout=cancelled");
+describe("checkoutBody", () => {
+  it("buys one of the pack's product and carries what the webhook needs", () => {
+    const body = checkoutBody(findPack("starter")!, "pdt_starter", "user_abc", "https://app.example.com");
+    expect(body.product_cart).toEqual([{ product_id: "pdt_starter", quantity: 1 }]);
+    expect(body.metadata).toEqual({ user_id: "user_abc", pack_id: "starter", credits: "5" });
+    expect(body.return_url).toBe("https://app.example.com/billing?checkout=success");
+    expect(body.cancel_url).toBe("https://app.example.com/billing?checkout=cancelled");
   });
 });
 
-describe("purchaseFromSession", () => {
-  it("turns a paid session into a grant", () => {
-    expect(purchaseFromSession(session({}))).toEqual({ sessionId: "cs_test_1", userId: "user_abc", credits: 5, amountCents: 4900 });
+describe("purchaseFromEvent", () => {
+  it("turns a succeeded payment into a grant keyed on the payment id", () => {
+    expect(purchaseFromEvent(paymentEvent())).toEqual({ paymentRef: "pay_1", userId: "user_abc", credits: 5, amountCents: 5341 });
   });
 
-  // An async payment method completes the session before the money arrives; the
-  // grant waits for `async_payment_succeeded`, which carries payment_status "paid".
-  it("grants nothing until the session is paid", () => {
-    expect(purchaseFromSession(session({ payment_status: "unpaid" }))).toBeNull();
+  it("grants nothing for other event types", () => {
+    expect(purchaseFromEvent(paymentEvent({}, "payment.failed"))).toBeNull();
+    expect(purchaseFromEvent(paymentEvent({}, "payment.processing"))).toBeNull();
   });
 
-  it("ignores sessions that are not credit purchases", () => {
-    expect(purchaseFromSession(session({ metadata: {} }))).toBeNull();
-    expect(purchaseFromSession(session({ metadata: { user_id: "user_abc", credits: "0" } }))).toBeNull();
-    expect(purchaseFromSession(session({ metadata: { user_id: "user_abc", credits: "lots" } }))).toBeNull();
+  it("ignores payments that are not credit purchases", () => {
+    expect(purchaseFromEvent(paymentEvent({ metadata: {} }))).toBeNull();
+    expect(purchaseFromEvent(paymentEvent({ metadata: null }))).toBeNull();
+    expect(purchaseFromEvent(paymentEvent({ metadata: { user_id: "user_abc", credits: "0" } }))).toBeNull();
+    expect(purchaseFromEvent(paymentEvent({ metadata: { user_id: "user_abc", credits: "lots" } }))).toBeNull();
+    expect(purchaseFromEvent({ nonsense: true })).toBeNull();
+  });
+});
+
+// Dodo signs with Standard Webhooks: base64 HMAC-SHA256 over `id.timestamp.body`, keyed
+// with the base64 part of a whsec_ secret, sent as `v1,<sig>` in webhook-signature.
+describe("Dodo webhook signature", () => {
+  const secret = `whsec_${Buffer.from("dodo-test-key").toString("base64")}`;
+  const body = JSON.stringify(paymentEvent());
+  const now = new Date("2026-09-21T10:00:00Z");
+  const ts = String(Math.floor(now.getTime() / 1000));
+  const sign = (key: string) =>
+    `v1,${createHmac("sha256", Buffer.from(key.replace(/^whsec_/, ""), "base64")).update(`msg_1.${ts}.${body}`).digest("base64")}`;
+  const headers = (signature: string) => ({ id: "msg_1", timestamp: ts, signature });
+
+  it("accepts a correctly signed payment event", () => {
+    expect(verifyWebhookSignature(body, headers(sign(secret)), secret, now)).toEqual({ ok: true });
   });
 
-  it("reads a session out of a signed webhook payload", () => {
-    const stripe = new Stripe("sk_test_dummy");
-    const secret = "whsec_test_secret";
-    const payload = JSON.stringify({
-      id: "evt_1",
-      object: "event",
-      type: "checkout.session.completed",
-      data: { object: session({}) },
-    });
-    const header = stripe.webhooks.generateTestHeaderString({ payload, secret });
-    const event = stripe.webhooks.constructEvent(payload, header, secret);
-    expect(event.type).toBe("checkout.session.completed");
-    expect(purchaseFromSession(event.data.object as Stripe.Checkout.Session)?.credits).toBe(5);
-    expect(() => stripe.webhooks.constructEvent(payload, header, "whsec_wrong")).toThrow();
+  it("rejects a wrong key and a tampered body", () => {
+    const wrong = `whsec_${Buffer.from("other").toString("base64")}`;
+    expect(verifyWebhookSignature(body, headers(sign(wrong)), secret, now).ok).toBe(false);
+    expect(verifyWebhookSignature(body.replace('"5"', '"500"'), headers(sign(secret)), secret, now).ok).toBe(false);
   });
 });
