@@ -51,20 +51,17 @@ function ratio(a, b) {
  * `min` is the WCAG floor the token must clear for how it is actually used:
  * 4.5 for text, 3 for non-text UI (rules, meters, focus rings).
  *
- * `scope` names the rule the pairing is painted inside. `.reverse` is an inverted
- * island: in light it inherits the page tokens, in dark it carries local copies of
- * the four it paints with (theme-dark.css). Either way the pairing is the same one,
- * so it is checked the same way — against whatever those tokens resolve to there.
+ * `scope` names the rule a pairing is painted inside, for a theme that redefines
+ * tokens locally. Nothing does today — the inverted `.reverse` island went with the
+ * move to minimalism — but the mechanism stays, because the next one will need it.
  */
 const CASES = [
   { what: "body text", fg: "--color-text", bg: "--color-bg", min: 4.5 },
   { what: "muted text (the floor)", fg: "--color-neutral-700", bg: "--color-bg", min: 4.5 },
   { what: "links", fg: "--color-accent-700", bg: "--color-bg", min: 4.5 },
   { what: "primary button label", fg: "--color-bg", bg: "--color-accent-700", min: 4.5 },
+  { what: "selected segment label", fg: "--color-bg", bg: "--color-accent-700", min: 4.5 },
   { what: "accent as non-text UI", fg: "--color-accent", bg: "--color-bg", min: 3 },
-  { what: "reversed field text", fg: "--color-bg", bg: "--color-accent-900", min: 4.5, scope: ".reverse" },
-  { what: "reversed field accent", fg: "--color-accent-300", bg: "--color-accent-900", min: 4.5, scope: ".reverse" },
-  { what: "invert button on its hover ground", fg: "--color-accent-900", bg: "--color-accent-100", min: 4.5, scope: ".reverse" },
   { what: "tag / notice tint ground type", fg: "--color-accent-800", bg: "--color-accent-100", min: 4.5 },
   { what: "neutral tag type", fg: "--color-neutral-800", bg: "--color-neutral-100", min: 4.5 },
   { what: "text on a raised surface", fg: "--color-text", bg: "--color-surface", min: 4.5 },
@@ -92,7 +89,7 @@ const dark = {
   name: "dark   (theme-dark.css @media prefers-color-scheme: dark)",
   // Dark redefines a subset; everything it does not name still comes from globals.
   root: { ...light.root, ...darkRoot },
-  scopes: { ".reverse": readBlock(themeDark, ".reverse") ?? {} },
+  scopes: {},
 };
 
 let failed = 0;

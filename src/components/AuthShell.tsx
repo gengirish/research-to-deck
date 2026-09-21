@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Blueprint, Eyebrow } from "./Blueprint";
+import { Blueprint } from "./Blueprint";
 
 /**
  * Frame around Clerk's <SignIn />/<SignUp /> widgets so the auth pages read as part
@@ -7,12 +7,10 @@ import { Blueprint, Eyebrow } from "./Blueprint";
  * themselves are restyled through the `clerk` appearance block in globals.css.
  */
 export default function AuthShell({
-  eyebrow,
   title,
   blurb,
   children,
 }: {
-  eyebrow: string;
   title: string;
   blurb: string;
   children: React.ReactNode;
@@ -32,7 +30,6 @@ export default function AuthShell({
       <div className="rule" />
 
       <main className="auth-wrap" id="main">
-        <Eyebrow label={eyebrow} sheet="A-01" />
         <h1 className="auth-title">{title}</h1>
         <p className="auth-blurb">{blurb}</p>
         <Blueprint className="auth-panel">{children}</Blueprint>

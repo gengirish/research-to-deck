@@ -2,48 +2,62 @@
 
 > Overrides `../MASTER.md` for this page only. Anything not stated here follows MASTER.
 
-**Role:** the marketing surface *and* the job sheet. It has to sell the audit trail and
-take the order in the same scroll.
+**Role:** take the order. It is no longer a marketing page.
+
+## What it is
+
+Four blocks, one column, `max-width: 760px`:
+
+1. `.lede-block` — the `<h1>` and one paragraph.
+2. `form.job-form` — topic, paper count, optional email, submit. Hairline underneath.
+3. `ol.steps` — three steps, one line each.
+4. `footer.site-footer`.
+
+Nothing else. No framed surfaces, no `<Blueprint>`, no ornament of any kind.
 
 ## Deviations from MASTER
 
 | Rule | MASTER | Here | Why |
 |---|---|---|---|
-| Display scale | `h1` 42px | `.hero-title` `clamp(50px, 6.8vw, 92px)`, uppercase, `-0.052em` left bleed | The title block of a drawing sheet; the optical left edge must align to the grid |
-| Shadow | Hairlines only | `--shadow-sm` on the job-sheet `<Blueprint>` | The one permitted shadow — lifts the form off the gridded `.plate` |
-| Ground | Flat `--color-bg` | `.plate` carries a 34px repeating grid at 12% accent | The blueprint substrate; hero only |
-| Input size | `.input` | `.topic-input` at 56px / 17px / `--font-heading` | The topic is the single most important field on the site |
-| Type floor | 12px | 9px inside the sample-slide mock | It is a *depiction* of a deck, not copy — so it carries `aria-hidden="true"`, like the hero photograph's empty `alt`. The caption beneath says what it is. Nothing outside that block may claim this. |
+| Container | 1220px | 760px (`.wrap-narrow`) | One column of prose and one form; wider hurts both |
+| Display scale | `h1` 42px | `clamp(38px, 5.4vw, 64px)`, uppercase, `text-wrap: balance` | It used to draw its scale from the gridded plate behind it. Standing alone it needs less shout and a balanced measure |
+| Input size | `.input` | `.topic-input` at 56px / 17px / `--font-heading` | The topic is the only field that matters |
 
-## Section order (fixed)
+## What was removed, and why it is not coming back
 
-`.plate` hero + job sheet → `.steps` (3) → run spec sheet (`#how`) → outputs →
-verifiability, reversed (`#verifiability`) → FAQ → reversed CTA → footer.
+The gridded hero plate, the duotone photograph and its caption, the output-spec table,
+the sample-slide mock, the run-figures sheet, the three output cards, the reversed
+verifiability panel with its six-row record, the four-question FAQ, and the closing CTA.
 
-CTA placement is **above the fold** — the job sheet sits inside the hero, not below it.
-The closing `.btn-invert` is a jump link back to `#topic`, never a second form.
+Measured: **3,825px → 1,088px** at 1440, **6,486px → 1,525px** at 375. Forty-eight
+registration marks → zero.
+
+Every claim on those sections was true and the pipeline still keeps all of them. They
+were removed because the page was arguing a case to someone who had already arrived.
+If any of it needs to come back, it belongs in the README or a docs page, **not** bolted
+onto the form.
+
+The closing CTA is gone specifically because the form is above the fold. A second
+"generate a deck" button that scrolls you back up to the first one is not a call to
+action, it is a detour.
 
 ## Required on this page
 
-- `<h1>` is `.hero-title`. Section headings are `<h2>`. No level skipped.
-- The aside figure is decorative: `alt=""`, `priority`, explicit `width`/`height` +
-  `aspect-ratio` so it cannot shift layout.
-- **Fix:** `Papers to read` is a radio group — `<fieldset>` + `<legend>`, not a bare
-  `<label>` (it currently has no `for`).
-- **Fix:** the email field needs persistent helper text, not a placeholder alone:
-  *"We send the .pptx when the run finishes. Optional."*
-- **Fix:** `.form-error` needs `role="alert"`; on submit failure move focus to the first
-  invalid field.
-- Signed-out state swaps the submit for a `SignInButton` that **preserves the typed
-  topic**. The submit note changes with it. Never hide the form behind auth.
-- `signedIn === undefined` (Clerk still loading) renders a disabled neutral button — never
-  flash "Sign in" at an already-signed-in user.
-
-## Done (Phase 1–2)
-
-- The 10 raw `#f2f2f3` literals in the sample-slide and verifiability blocks are now
-  `var(--color-bg)`; the ESLint gate that forbids their return is live.
-- `Papers to read` is a `<fieldset>`/`<legend>`; the email field has persistent helper
-  text wired through `aria-describedby` and an `autocomplete` hint.
+- `<h1>` is `.hero-title`. It is the only `<h1>`.
+- The form is above the fold at every supported width — the landing spec asserts this.
+- `Papers to read` is a `<fieldset>`/`<legend>`; the email field carries persistent
+  helper text through `aria-describedby` and an `autocomplete` hint.
 - `.form-error` is `role="alert"` and takes focus on submit failure.
 - The skip link lands on `<main id="main">`.
+- Signed-out swaps the submit for a `SignInButton` that **preserves the typed topic**.
+  `signedIn === undefined` (Clerk loading) renders a disabled neutral button — never
+  flash "Sign in" at an already signed-in user.
+- The header carries the brand and the account control only. The in-page anchors to
+  `#how` and `#verifiability` went with the sections; the spec checks every remaining
+  `href="#…"` resolves to something.
+
+## Do not
+
+- ❌ Add a section. The page is four blocks; that is the design, not an accident.
+- ❌ Reintroduce a framed surface around the form. The hairline under it is enough.
+- ❌ Put a second submit or CTA anywhere on the page.

@@ -6,7 +6,6 @@ export const metadata = { title: "Create an account · Research-to-Deck" };
 export default function Page() {
   return (
     <AuthShell
-      eyebrow="Access"
       title="Create an account"
       blurb="Your runs stay yours: every deck you generate is scoped to your account."
     >

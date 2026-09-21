@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Blueprint, Corners, SheetHead } from "./Blueprint";
+import { Blueprint } from "./Blueprint";
 import PaperSkeleton from "./PaperSkeleton";
 import { clock, JobEvent, JobStatus, pad2, PHASES, phaseIndex, stripCounter } from "./deck";
 
@@ -146,8 +146,7 @@ export default function RunningView({
               "start another run" stays subordinate and there is still one primary CTA. */}
           <div className="recovery">
             {failed && (
-              <button type="button" className="btn btn-primary blueprint" onClick={onRetry}>
-                <Corners />
+              <button type="button" className="btn btn-primary" onClick={onRetry}>
                 Retry this topic
               </button>
             )}
@@ -203,7 +202,10 @@ export default function RunningView({
       </div>
 
       <Blueprint style={{ marginTop: 34, background: "var(--color-bg)" }}>
-        <SheetHead title="Activity log — everything the worker is doing" marks={[`${events.length} entries`]} />
+        <div className="panel-head" style={{ padding: "12px 18px 0" }}>
+          <span className="panel-label">Activity log</span>
+          <span className="meta">{events.length} entries</span>
+        </div>
         <div style={{ padding: "12px 18px 16px" }}>
           <ol
             className="log"

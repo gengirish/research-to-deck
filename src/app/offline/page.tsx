@@ -5,7 +5,7 @@ export const metadata: Metadata = { title: "Offline · Research-to-Deck" };
 export default function Offline() {
   return (
     <main className="wrap">
-      <div className="eyebrow">IntelliForge Deep Research</div>
+      <p className="panel-label">IntelliForge Deep Research</p>
       <h1>You&rsquo;re offline</h1>
       <p className="lede">
         Generating a deck needs a connection — we read papers from OpenAlex and call Claude to write the slides. Any deck

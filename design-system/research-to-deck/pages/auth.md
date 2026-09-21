@@ -36,7 +36,8 @@ Scope: `.auth-panel` only. Nothing outside it may claim this exemption.
 
 ## Required on this page
 
-- `<h1>` is `.auth-title`. `Eyebrow` sheet number is `A-01` (auth series).
+- `<h1>` is `.auth-title`. The eyebrow and its sheet number were removed with the rest
+  of the ornament; the title carries the page on its own.
 - The header keeps the `brand-lock` and one escape route back to `/` — a user who cannot
   get out of auth is a lost user (`escape-routes`).
 - Clerk headings inherit `--font-heading`; its buttons must still clear 44px.

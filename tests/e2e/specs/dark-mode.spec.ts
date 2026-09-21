@@ -14,7 +14,7 @@ import { TOPIC } from "../fixtures/deckData";
  * `scripts/check-contrast.mjs` already asserts the token *law* for both themes from
  * the stylesheets. It cannot know which token a given element ends up painted with —
  * that is what these tests add, and it is where a dark theme usually breaks: an
- * island like `.reverse`, whose children hard-code a paper hex, or a blend mode whose
+ * island whose children hard-code a paper hex, or a blend mode whose
  * result no token can reach.
  *
  * Clerk's widget is excluded throughout: `.cl-*` markup ships its own light palette
@@ -167,68 +167,6 @@ test.describe("Dark mode", () => {
     expect(await contrastFailures(entryPage.page)).toEqual([]);
   });
 
-  /**
-   * `.reverse` is the one place a naive dark theme collapses. globals.css paints it
-   * with `background: var(--color-accent-900); color: var(--color-bg)` and its
-   * children hard-code `#f2f2f3` at 6–86% for the hatch, the rules and the lede — so
-   * if the panel ground goes light, that near-white type goes with it and the block
-   * turns into grey on grey.
-   */
-  test("the reversed field stays an inverted island, not a grey-on-grey block", async ({ entryPage }) => {
-    await entryPage.goto();
-    const { page } = entryPage;
-
-    const ground = await renderedColor(page, ".reverse", "background-color");
-    const type = await renderedColor(page, ".reverse", "color");
-    expect(contrast(type, ground)).toBeGreaterThanOrEqual(4.5);
-
-    // It has to read as a *raised plate*, separate from the page ground it sits on.
-    expect(contrast(ground, "rgb(20, 25, 30)")).toBeGreaterThan(1.25);
-    // And it is the lighter of the two here, the way it is the darker one on paper.
-    expect(relativeLuminance(channels(ground))).toBeGreaterThan(relativeLuminance([20, 25, 30]));
-
-    // NB: the 45° hatch is *not* asserted, because it is not painted in either
-    // theme. globals.css writes the rule as `.reverse .hatch` (descendant) while
-    // EntryView puts both classes on one element (`className="reverse hatch"`), so
-    // the selector has never matched. That is a pre-existing bug in a file this
-    // phase does not own; when it is fixed, the tint is `#f2f2f3` at 6%, which
-    // still reads against the scoped dark panel ground.
-
-    // The panel label and eyebrow ride on --color-accent-300, scoped inside .reverse.
-    const label = await renderedColor(page, ".reverse .panel-label", "color");
-    expect(contrast(label, ground)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  test("the blueprint grid is still drawn on the hero plate", async ({ entryPage }) => {
-    await entryPage.goto();
-    const grid = await renderedColor(entryPage.page, ".plate", "background-image");
-    // Two repeating gradients, not `none` — the grid is the plate's whole identity.
-    expect(grid.match(/repeating-linear-gradient/g)?.length).toBe(2);
-    // Re-tuned from 12% to 16% for the dark ground; below ~14% it stops reading.
-    expect(grid).toMatch(/\/\s*0\.16/);
-  });
-
-  /**
-   * `mix-blend-mode: color` takes its luminosity from the backdrop, so no token can
-   * darken the hero photograph. Left alone it keeps full paper brightness and glares.
-   */
-  test("the duotone figure is dimmed for the dark ground and keeps its tint", async ({ entryPage }) => {
-    await entryPage.goto();
-    const { page } = entryPage;
-
-    const opacity = Number(await renderedColor(page, ".duotone img", "opacity"));
-    expect(opacity).toBeLessThan(1);
-    expect(opacity).toBeGreaterThan(0.6);
-    // The figure composites against the page ground, not white.
-    await expect(page.locator(".duotone").first()).toHaveCSS("background-color", "rgb(20, 25, 30)");
-    // The accent overlay is what makes it a duotone; it must survive the dimming.
-    const blend = await page
-      .locator(".duotone")
-      .first()
-      .evaluate((el) => getComputedStyle(el, "::after").mixBlendMode);
-    expect(blend).toBe("color");
-  });
-
   test("tint grounds are dark tints, not light ones bolted onto a dark page", async ({
     deckApi,
     entryPage,
@@ -316,10 +254,11 @@ test.describe("Light mode is unaffected", () => {
     await entryPage.goto();
     const { page } = entryPage;
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(242, 242, 243)");
-    // .reverse is the darker of the two on paper — the inversion runs the other way.
-    const ground = await renderedColor(page, ".reverse", "background-color");
-    expect(relativeLuminance(channels(ground))).toBeLessThan(relativeLuminance([242, 242, 243]));
-    // And the figure is not dimmed: that is a dark-ground correction only.
-    expect(Number(await renderedColor(page, ".duotone img", "opacity"))).toBe(1);
+    // Muted text resolves to the light ramp's neutral-700, not the dark one's.
+    const muted = await renderedColor(page, ".submit-note", "color");
+    expect(relativeLuminance(channels(muted))).toBeLessThan(relativeLuminance([242, 242, 243]));
+    // And the primary action is a dark block carrying paper type, as it is on paper.
+    const cta = await renderedColor(page, ".btn-primary", "background-color");
+    expect(relativeLuminance(channels(cta))).toBeLessThan(relativeLuminance([242, 242, 243]));
   });
 });

@@ -46,6 +46,12 @@ lives.
 - ❌ Lower `.result-main`'s flex-basis below `560px`. It is what makes the aside wrap at
   768px; at the old `420px` both columns shared the row and the slide rendered at 427px.
 
+## After the ornament strip
+
+The slide and the asides keep their `.blueprint` hairline frame — they group real
+content, which is what a frame is now for. What they lost is the corner marks and the
+inline ones on the download link.
+
 ## Known gaps
 
 - **Clerk is not themed.** `.cl-*` ships its own light palette, so `/sign-in`, `/sign-up`

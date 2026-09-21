@@ -130,11 +130,7 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
             New run
           </button>
           {job.downloadUrl && (
-            <a className="btn btn-primary blueprint" href={job.downloadUrl} onClick={onDownload} style={{ padding: "12px 22px" }}>
-              <i className="corner tl" />
-              <i className="corner tr" />
-              <i className="corner bl" />
-              <i className="corner br" />
+            <a className="btn btn-primary" href={job.downloadUrl} onClick={onDownload} style={{ padding: "12px 22px" }}>
               Download .pptx
             </a>
           )}

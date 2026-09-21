@@ -7,7 +7,7 @@
 ---
 
 **Project:** Research-to-Deck
-**System name:** Industry (blueprint / drawing-sheet language)
+**System name:** Industry (minimal)
 **Category:** Data-Dense + Drill-Down (research tool, not a BI dashboard)
 **Source of truth:** the stylesheet layers below. This file documents those tokens; it
 does not introduce new ones. If the two disagree, the CSS wins and this file is the bug.
@@ -30,21 +30,30 @@ layout rule it animates.
 
 > **Note on provenance.** The UI/UX Pro Max generator proposed a "Data-Dense Dashboard"
 > style with a `#1E40AF`/`#F59E0B` palette, Exo + Roboto Mono, 8–16px radii and drop
-> shadows. That was **rejected** — the app already has a stronger, coherent system. What
-> was adopted from the generator: the Data-Dense + Drill-Down page pattern, the
-> accessibility checklist, and the anti-pattern list. See
-> `docs/ui-ux-improvement-plan.md` §0.
+> shadows. That was **rejected** — see `docs/ui-ux-improvement-plan.md` §0. What was
+> adopted: the Data-Dense + Drill-Down pattern, the accessibility checklist, and the
+> anti-pattern list.
+>
+> **The drawing-sheet ornament was then removed by decision**, not by drift. Corner
+> registration marks, ruled sheet heads, section eyebrows, the gridded hero plate, the
+> 45° hatch and the inverted `.reverse` field are all gone, and the landing page was cut
+> to a statement, the form, three steps and a footer. What remains is square corners,
+> hairlines, condensed display type and whitespace. This file describes that, not what
+> came before.
 
 ---
 
 ## 1. The idea in one paragraph
 
-Every surface is a **wireframe object on a drawing sheet**: square, hairline-bordered,
-carrying registration marks at its corners and a ruled caption bar naming it. Display type
-is condensed and uppercase, like a drawing title block. Body type is never uppercase. The
-palette is paper and graphite with one steel-blue accent. Nothing is rounded, nothing
-floats, nothing is decorative. The aesthetic exists to say: *this output is a record you
-can audit*, which is the product's entire claim.
+**Say it once, in as little as possible.** Square corners, hairline rules, condensed
+uppercase display type over quiet body text, and a palette of paper and graphite with one
+steel-blue accent. Separation is whitespace first and a hairline second; there are no
+frames-within-frames, no marks, no captions naming a panel, no decoration of any kind.
+The restraint is the argument: a tool whose whole claim is *this output is a record you
+can audit* should not need to decorate itself to be believed.
+
+The product surfaces stay dense — the run log and the deck drill-down are evidence, and
+evidence is shown, not summarised. It is the **marketing** surface that is spare.
 
 ---
 
@@ -154,11 +163,12 @@ control it cannot fit 375px on one line.
 - **`border-radius: 0`. Everywhere. No exceptions.** This is the single most load-bearing
   rule in the system; `--radius-sm/md/lg` exist only to flatten third-party widgets
   (Clerk) that refuse `0`.
-- Separation is a **1px hairline**, not a shadow. `--shadow-sm` is permitted once, on the
-  job-sheet form, to lift it off the gridded plate. `--shadow-md` / `--shadow-lg` are
-  defined but unused — keep it that way.
-- Every framed surface renders `<Corners />` (the four `+` registration marks). A framed
-  element never drops its marks.
+- Separation is **whitespace first, a 1px hairline second**, and never a shadow.
+  `--shadow-sm/md/lg` are defined but unused in light — keep it that way.
+- **No ornament.** No registration marks, no ruled caption bars, no section eyebrows, no
+  background grids or hatching. If an element's only job is to look technical, delete it.
+- A framed surface is `.blueprint`: one hairline, square, nothing else. Use it for panels
+  that genuinely group content — the run log, the slide, the aside — not for emphasis.
 
 ### 2.6 Motion
 
@@ -183,10 +193,9 @@ animation in the app.
 transform needs the additive block in `motion.css` too — a delay left standing with
 `animation-fill-mode: both` holds new content invisible for the length of the delay.
 
-**Framed buttons do not squeeze.** `.btn.blueprint` is excluded from press scaling: its
-`<i class="corner">` marks sit `-6px` outside the border box, so scaling drags them
-inward and no child counter-scale can undo it. Framed buttons get colour-only press
-feedback until the marks move outside the scaled box.
+**Every button squeezes.** The exemption that once applied to framed buttons went with
+the registration marks — nothing sits outside the border box to be dragged inward by the
+scale.
 
 ---
 
@@ -204,18 +213,14 @@ These are the classes that already exist. Build from them; do not invent a paral
 }
 ```
 
-Children: four `<i class="corner tl|tr|bl|br">` marks, supplied by `<Corners />`.
-Use `<Blueprint as="section|figure|aside">` rather than hand-rolling the markup.
+One hairline, square, no marks. Use `<Blueprint as="section|figure|aside">` rather than
+hand-rolling the markup. The landing page uses none; the run and result views use it for
+the panels that group real content.
 
-### 3.2 Sheet head — `<SheetHead title marks={[]}>`
+### 3.2 Panel label — `.panel-label` / `.panel-head`
 
-The ruled caption bar that titles a framed panel. First cell flexes; each `mark` is a
-right-aligned cell separated by a hairline. Uppercase, `--font-heading`, `0.12em` tracking.
-
-### 3.3 Eyebrow — `<Eyebrow label sheet>`
-
-Section label · hairline fill · optional sheet number. `12px`, `0.18em`, uppercase,
-`--color-accent-700`.
+What replaced the ruled sheet head and the eyebrow: a small uppercase label, optionally
+with a right-aligned `.meta` count on the same baseline. No rules, no sheet numbers.
 
 ### 3.4 Buttons — `.btn`
 
@@ -287,9 +292,14 @@ inside the reversed field is verified separately — light-mode values do not ca
 
 **Data-Dense + Drill-Down.** Three views, one route:
 
-`EntryView` (marketing + job sheet) → `RunningView` (live telemetry) → `ResultView`
-(slide drill-down). The primary CTA sits above the fold in the job sheet. Density is a
-feature: the run's record *is* the product's proof, so show it rather than summarise it.
+`EntryView` (statement + form) → `RunningView` (live telemetry) → `ResultView` (slide
+drill-down).
+
+The two surfaces pull opposite ways, deliberately. **Entry is spare**: a statement, the
+form, three one-line steps, a footer — roughly 1,000px at desktop width, down from 3,800.
+**Running and result are dense**: the run's record *is* the product's proof, so it is
+shown rather than summarised. Minimalism applies to what the product *says about itself*,
+not to what it *shows you*.
 
 Page-specific deviations live in `pages/`:
 
@@ -305,7 +315,8 @@ Page-specific deviations live in `pages/`:
 System-specific — these break Industry:
 
 - ❌ **Any `border-radius` other than `0`** in app CSS.
-- ❌ **A framed surface without corner marks.** Use `<Blueprint>`.
+- ❌ **Reintroducing ornament** — corner marks, sheet heads, eyebrows, background grids,
+  hatching. They were removed by decision; putting one back is a revert, not a flourish.
 - ❌ **Raw hex in a component.** No `#f2f2f3` in a `style={{ }}` prop; use `var(--color-bg)`.
   (~14 such literals exist today in `EntryView.tsx` / `ResultView.tsx` — all are debt.)
 - ❌ **A new shadow value.** Hairlines separate; shadows do not.
@@ -330,7 +341,7 @@ Universal (from the generator's list, all still apply):
 **Visual**
 
 - [ ] No `border-radius` other than `0`
-- [ ] Every framed surface renders `<Corners />`
+- [ ] No ornament reintroduced (marks, sheet heads, eyebrows, grids, hatching)
 - [ ] No raw hex in any component; tokens only
 - [ ] No emoji as icons; one consistent icon set
 - [ ] No new shadow values

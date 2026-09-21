@@ -82,13 +82,11 @@ a:focus-visible,
    A 2% squeeze on press, released on pointer-up. `transform` only: the box keeps
    its bounds in layout, nothing reflows, and `border-radius` stays 0.
 
-   Deliberately excluded: `.btn.blueprint`. Its four `<i class="corner">` marks sit
-   at -6px outside the border box, so scaling the button drags the registration
-   marks inward with it. A child counter-scale cannot undo that translation, so
-   those buttons get the colour transition and no squeeze rather than a squeeze
-   that breaks the frame. See the report for the component-side alternative.
+   Every button squeezes now: the registration marks that used to sit outside the
+   border box are gone, so nothing is dragged inward by the scale.
+
    ── */
-.btn:not(.blueprint):not(:disabled):active,
+.btn:not(:disabled):active,
 .thumb:active {
   transform: scale(0.98);
 }
@@ -173,7 +171,7 @@ a:focus-visible,
 
   /* No squeeze on press when motion is reduced — the colour change already
      confirms the press. */
-  .btn:not(.blueprint):not(:disabled):active,
+  .btn:not(:disabled):active,
   .thumb:active {
     transform: none;
   }

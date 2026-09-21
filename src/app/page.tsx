@@ -154,8 +154,6 @@ export default function Home() {
           <span className="mark">IntelliForge</span>
           <span className="sub">Research / Deck</span>
         </div>
-        <a href="#how">Method</a>
-        <a href="#verifiability">Verifiability</a>
         <a href={`${REPO}#api`}>API</a>
         <span className="tag tag-outline" style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 12 }}>
           Beta

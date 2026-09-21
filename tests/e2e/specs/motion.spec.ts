@@ -128,9 +128,9 @@ test.describe("Interactive states share one rhythm", () => {
 });
 
 /**
- * Signed *out*, deliberately: every `.btn` on the signed-in entry view carries the
- * `.blueprint` frame, and framed buttons are exempt from the squeeze (see motion.css).
- * The header's "Sign in" is the unframed button this contract is about.
+ * Every button squeezes now. The exemption that used to apply to framed buttons went
+ * with the registration marks: nothing sits outside the border box to be dragged
+ * inward by the scale, so `.btn.blueprint` no longer needs carving out.
  */
 test.describe("Press feedback", () => {
   test.use({ authState: "signed-out" });
@@ -138,7 +138,7 @@ test.describe("Press feedback", () => {
   test("a held button squeezes to 0.98 and springs back on release", async ({ entryPage }) => {
     await entryPage.goto();
     const page = entryPage.page;
-    const button = page.locator(".btn:not(.blueprint)").first();
+    const button = page.locator(".btn").first();
     await expect(button).toBeVisible();
 
     expect(await computed(button, "transform")).toBe("none");
@@ -158,7 +158,7 @@ test.describe("Press feedback", () => {
   test("pressing does not round the corners or move the box", async ({ entryPage }) => {
     await entryPage.goto();
     const page = entryPage.page;
-    const button = page.locator(".btn:not(.blueprint)").first();
+    const button = page.locator(".btn").first();
     await expect(button).toBeVisible();
 
     const before = (await button.boundingBox())!;
@@ -263,7 +263,7 @@ test.describe("Reduced motion", () => {
     }
 
     // A press must not squeeze when motion is reduced — colour alone confirms it.
-    const button = page.locator(".btn:not(.blueprint)").first();
+    const button = page.locator(".btn").first();
     await expect(button).toBeVisible();
     const box = (await button.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

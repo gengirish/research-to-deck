@@ -34,7 +34,8 @@ waiting legible — and the reading log *is* the product's proof, so density bea
 
 ## Done (Phase 2)
 
-`<h1>`, `role="progressbar"` with live `aria-valuenow`/`aria-valuetext`, the phase `<ol>`
+The ornament strip replaced the log's `SheetHead` with a plain `.panel-head`; the
+panels keep their hairline frame. `<h1>`, `role="progressbar"` with live `aria-valuenow`/`aria-valuetext`, the phase `<ol>`
 with `aria-current="step"` and a `.vh` state word per row, the log as a focusable
 `role="log"` live region, `role="alert"` on the failure message, the "lost contact"
 banner, and `.meter` on `scaleX()` instead of `width`.
