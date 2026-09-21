@@ -21,9 +21,9 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Research-to-Deck",
+  title: "CiteDeck",
   description: "Name a topic. We screen the OpenAlex corpus, read the papers that matter, and compose a cited PowerPoint.",
-  applicationName: "Research-to-Deck",
+  applicationName: "CiteDeck",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

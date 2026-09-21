@@ -136,7 +136,7 @@ async function searchPage(query: string, page: number): Promise<{ count: number;
   const mailto = env.openAlexMailto;
   if (mailto) {
     params.set("mailto", mailto);
-    headers["User-Agent"] = `research-to-deck (mailto:${mailto})`;
+    headers["User-Agent"] = `citedeck (mailto:${mailto})`;
   }
 
   const res = await fetchWithRetry(`${API_BASE}/works?${params}`, { headers }, { retries: 5, baseDelayMs: 1_000 });

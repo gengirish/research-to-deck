@@ -312,7 +312,7 @@ figure { margin: 0; }
 .table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Research-to-Deck — composition. Only tokens and the classes above.
+   CiteDeck — composition. Only tokens and the classes above.
    ══════════════════════════════════════════════════════════════════════ */
 
 .shell { min-height: 100dvh; background: var(--color-bg); color: var(--color-text); }

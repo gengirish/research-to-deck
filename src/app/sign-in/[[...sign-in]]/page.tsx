@@ -1,7 +1,7 @@
 import { SignIn } from "@clerk/nextjs";
 import AuthShell from "@/components/AuthShell";
 
-export const metadata = { title: "Sign in · Research-to-Deck" };
+export const metadata = { title: "Sign in · CiteDeck" };
 
 export default function Page() {
   return (

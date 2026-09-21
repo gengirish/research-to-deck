@@ -14,7 +14,7 @@ export async function fetchPdfPages(url: string): Promise<string[] | null> {
   try {
     const res = await fetchWithRetry(
       url,
-      { headers: { "User-Agent": "research-to-deck/0.1 (academic research tool)", Accept: "application/pdf" }, redirect: "follow" },
+      { headers: { "User-Agent": "citedeck/0.1 (academic research tool)", Accept: "application/pdf" }, redirect: "follow" },
       { retries: 1, timeoutMs: 25_000 },
     );
     if (!res.ok) return null;

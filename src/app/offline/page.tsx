@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Offline · Research-to-Deck" };
+export const metadata: Metadata = { title: "Offline · CiteDeck" };
 
 export default function Offline() {
   return (

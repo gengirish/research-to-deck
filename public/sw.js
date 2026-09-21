@@ -1,5 +1,5 @@
 /**
- * Research-to-Deck service worker.
+ * CiteDeck service worker.
  *
  * Three routing rules, in order:
  *   1. /api/*            → network only. Job state and .pptx downloads must never come from a cache.

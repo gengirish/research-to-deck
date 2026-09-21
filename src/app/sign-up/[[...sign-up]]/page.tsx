@@ -1,7 +1,7 @@
 import { SignUp } from "@clerk/nextjs";
 import AuthShell from "@/components/AuthShell";
 
-export const metadata = { title: "Create an account · Research-to-Deck" };
+export const metadata = { title: "Create an account · CiteDeck" };
 
 export default function Page() {
   return (

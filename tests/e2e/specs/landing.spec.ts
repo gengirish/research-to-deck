@@ -14,7 +14,7 @@ test.describe("Landing page", () => {
   });
 
   test("leads with the promise and goes straight to the form", async ({ page, entryPage }) => {
-    await expect(page).toHaveTitle(/Research-to-Deck/);
+    await expect(page).toHaveTitle(/CiteDeck/);
     await expect(entryPage.heroTitle).toContainText("Fifty papers in,");
     await expect(entryPage.heroTitle).toContainText("one cited deck out.");
     await expect(entryPage.topicInput).toBeVisible();

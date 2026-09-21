@@ -1,4 +1,4 @@
-# Research-to-Deck Generator
+# CiteDeck
 
 POST a research topic → get back a branded PowerPoint deck built from 50+ papers, where every bullet cites its source paper. This is the core pipeline behind deep-research.intelliforge.tech.
 
@@ -274,7 +274,7 @@ string it does not read.
 
 ## Deploy
 
-Live: **https://research-to-deck.vercel.app** (app on Vercel, worker on Fly.io).
+Live: **https://citedeck.intelliforge.tech** (also https://research-to-deck.vercel.app) (app on Vercel, worker on Fly.io).
 
 1. **Database:** on the Vercel project, Storage → Create Database → Neon (free tier), connected to the project. That sets `DATABASE_URL`. Copy the value into `.env.local` and run `npm run db:migrate`.
 2. **Redis:** Storage → Create Database → Upstash → **Redis** (not QStash or Vector), connected to the project. That sets `REDIS_URL`. Copy the `rediss://` value into `.env.local` too.

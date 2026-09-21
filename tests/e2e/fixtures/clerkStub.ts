@@ -103,7 +103,7 @@ export function clerkStubScript(signedIn: boolean, user: StubUser): string {
       this.telemetry = { record: () => {} };
       this.__internal_environment = {
         userSettings: { signUp: {}, attributes: {}, social: {} },
-        displayConfig: { applicationName: "Research-to-Deck (E2E)", homeUrl: "/" },
+        displayConfig: { applicationName: "CiteDeck (E2E)", homeUrl: "/" },
         authConfig: { singleSessionMode: true },
       };
       // Call counts the specs can assert on.

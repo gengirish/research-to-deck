@@ -28,7 +28,7 @@ function shell(heading: string, inner: string): string {
 ${inner}
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 28px 0 12px;">
     <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-      research-to-deck &middot; slides synthesized from ${paperSourceLabel()} papers with per-bullet citations.
+      CiteDeck &middot; slides synthesized from ${paperSourceLabel()} papers with per-bullet citations.
     </p>
   </body>
 </html>`;

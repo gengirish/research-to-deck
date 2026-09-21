@@ -106,7 +106,7 @@ test.describe("Static surface", () => {
     expect(res.status()).toBe(200);
 
     const manifest = await res.json();
-    expect(manifest.name).toBe("Research-to-Deck");
+    expect(manifest.name).toBe("CiteDeck");
     expect(manifest.short_name).toBe("R2Deck");
     expect(manifest.start_url).toBe("/");
     expect(manifest.display).toBe("standalone");

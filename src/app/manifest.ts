@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Research-to-Deck",
-    short_name: "R2Deck",
+    name: "CiteDeck",
+    short_name: "CiteDeck",
     description: "Turn 50+ papers into a cited, branded slide deck in minutes.",
     start_url: "/",
     scope: "/",

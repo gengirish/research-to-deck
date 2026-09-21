@@ -39,7 +39,7 @@ Postgres + Redis, but deploy separately: **app → Vercel, worker → a containe
 on Fly.io** (Railway or Render work the same way), because a 50-paper job runs for minutes and shells
 out to Python. Never move pipeline work into a route handler.
 
-Live deployment: app at https://research-to-deck.vercel.app (auto-deploys on push to `main`), worker
+Live deployment: app at https://citedeck.intelliforge.tech (Vercel project `research-to-deck`, also https://research-to-deck.vercel.app) (auto-deploys on push to `main`), worker
 as Fly app `research-to-deck-worker`, Neon Postgres and Upstash Redis provisioned through the Vercel
 Marketplace. Marketplace env values are `sensitive`, so `vercel env pull` returns them empty — copy
 connection strings from the store pages instead.

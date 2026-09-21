@@ -73,7 +73,7 @@ export async function getSystemInboxId(): Promise<string> {
     const inbox = await client.inboxes.create({
       username: env.agentMailInboxUsername,
       domain: env.agentMailDomain,
-      displayName: "research-to-deck",
+      displayName: "CiteDeck",
       // AgentMail restricts client ids to A-Z a-z 0-9 - . _ ~
       clientId: `research-to-deck.${env.agentMailInboxUsername}`,
     });
