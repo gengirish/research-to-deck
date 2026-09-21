@@ -1,3 +1,5 @@
+import { stripControlChars } from "./chunk";
+
 /**
  * Provider-agnostic paper shape. Every search provider (OpenAlex, Semantic Scholar)
  * normalises into this, so ingest/chunking/synthesis never care where a paper came from.
@@ -14,6 +16,18 @@ export interface Paper {
   pdfUrl: string | null;
   doi: string | null;
   arxivId: string | null;
+}
+
+/** Strips control characters from provider text before it reaches Postgres (TEXT and the JSONB search cache). */
+export function sanitizePaper(p: Paper): Paper {
+  const clean = (s: string | null) => (s === null ? null : stripControlChars(s));
+  return {
+    ...p,
+    title: stripControlChars(p.title),
+    authors: p.authors.map(stripControlChars),
+    venue: clean(p.venue),
+    abstract: clean(p.abstract),
+  };
 }
 
 /**

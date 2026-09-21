@@ -1,4 +1,5 @@
 import { extractText, getDocumentProxy } from "unpdf";
+import { stripControlChars } from "./chunk";
 import { fetchWithRetry } from "./http";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -27,7 +28,7 @@ export async function fetchPdfPages(url: string): Promise<string[] | null> {
 
     const doc = await getDocumentProxy(bytes);
     const { text } = await extractText(doc, { mergePages: false });
-    const pages = (Array.isArray(text) ? text : [text]).slice(0, MAX_PAGES);
+    const pages = (Array.isArray(text) ? text : [text]).slice(0, MAX_PAGES).map(stripControlChars);
     const totalChars = pages.reduce((n, p) => n + p.length, 0);
     return totalChars > 500 ? pages : null; // scanned PDFs with no text layer
   } catch {

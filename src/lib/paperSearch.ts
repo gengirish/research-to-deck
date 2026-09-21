@@ -1,7 +1,7 @@
 import { env } from "./env";
 import * as openAlex from "./openAlex";
 import * as semanticScholar from "./semanticScholar";
-import type { Paper } from "./paper";
+import { sanitizePaper, type Paper } from "./paper";
 
 export type { Paper };
 
@@ -26,6 +26,7 @@ export function paperSourceLabel(): string {
  * a `mailto` puts us in the polite pool (10 req/s), whereas unauthenticated Semantic
  * Scholar answers 429 to effectively every request.
  */
-export function searchPapers(query: string, count: number): Promise<Paper[]> {
-  return PROVIDERS[paperSource()].search(query, count);
+export async function searchPapers(query: string, count: number): Promise<Paper[]> {
+  const papers = await PROVIDERS[paperSource()].search(query, count);
+  return papers.map(sanitizePaper);
 }
