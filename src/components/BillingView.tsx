@@ -31,8 +31,15 @@ const DEFAULT_BRAND = { name: "", footer: "", primary: "#7C3AED", accent: "#06B6
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
 
-/** `checkout` is the return flag on the checkout's return / cancel URL. */
-export default function BillingView({ checkout }: { checkout?: string }) {
+/** Dodo payment statuses that mean no money moved and no credits are coming. */
+const FAILED_STATUSES = new Set(["failed", "cancelled"]);
+
+/**
+ * `checkout` is the return flag on the checkout's return / cancel URL; `paymentStatus` is
+ * the `status` Dodo appends to it.
+ */
+export default function BillingView({ checkout, paymentStatus }: { checkout?: string; paymentStatus?: string }) {
+  const paymentFailed = checkout === "success" && paymentStatus !== undefined && FAILED_STATUSES.has(paymentStatus);
   const { isLoaded, isSignedIn } = useAuth();
   const [billing, setBilling] = useState<BillingState | null>(null);
   const [brand, setBrand] = useState<BrandState | null>(null);
@@ -65,6 +72,35 @@ export default function BillingView({ checkout }: { checkout?: string }) {
       cancelled = true;
     };
   }, [isSignedIn]);
+
+  // Credits are granted by the webhook, which can land after this page loads, so after a
+  // checkout re-read the balance for a short while until it moves.
+  const initialBalance = billing?.balance ?? null;
+  useEffect(() => {
+    if (checkout !== "success" || paymentFailed || !isSignedIn || initialBalance === null) return;
+    let cancelled = false;
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries += 1;
+      try {
+        const res = await fetch("/api/billing", { cache: "no-store" });
+        if (res.ok && !cancelled) {
+          const next = (await res.json()) as BillingState;
+          if (next.balance !== initialBalance) {
+            setBilling(next);
+            clearInterval(timer);
+          }
+        }
+      } catch {
+        // Transient; the next tick retries.
+      }
+      if (tries >= 15) clearInterval(timer);
+    }, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [checkout, paymentFailed, isSignedIn, initialBalance]);
 
   async function buy(packId: string) {
     setBusy(packId);
@@ -138,9 +174,14 @@ export default function BillingView({ checkout }: { checkout?: string }) {
       <main className="wrap wrap-narrow" id="main">
         <h1 className="auth-title">Credits &amp; brand</h1>
 
-        {checkout === "success" && (
+        {checkout === "success" && !paymentFailed && (
           <p className="notice" role="status">
             Back from checkout. If the payment went through, your credits appear here within a few seconds.
+          </p>
+        )}
+        {paymentFailed && (
+          <p className="notice" role="alert">
+            The payment didn&rsquo;t go through, so nothing was charged. Try again with another card or, in India, UPI.
           </p>
         )}
         {checkout === "cancelled" && (
@@ -206,7 +247,7 @@ export default function BillingView({ checkout }: { checkout?: string }) {
                       ))}
                     </tbody>
                   </table>
-                  <p className="field-help">Payments by Dodo Payments, in USD. Sales tax or VAT for your country is added at checkout. Any purchase also unlocks custom deck branding below.</p>
+                  <p className="field-help">Payments by Dodo Payments. Prices are in USD; checkout may charge in your local currency and adds sales tax or VAT for your country. Any purchase also unlocks custom deck branding below.</p>
                 </>
               ) : (
                 <p className="auth-blurb">Billing is off on this deployment, so runs are unlimited.</p>
