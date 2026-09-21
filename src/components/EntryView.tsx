@@ -1,3 +1,5 @@
+import { SignInButton } from "@clerk/nextjs";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 import { Blueprint, Eyebrow, SheetHead } from "./Blueprint";
 
@@ -112,6 +114,8 @@ interface Props {
   onSubmit: (e: React.FormEvent) => void;
   submitting: boolean;
   error: string | null;
+  /** true signed in, false signed out, undefined while Clerk is still loading. */
+  signedIn: boolean | undefined;
 }
 
 export default function EntryView({
@@ -124,9 +128,18 @@ export default function EntryView({
   onSubmit,
   submitting,
   error,
+  signedIn,
 }: Props) {
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // A submit failure is announced by role="alert", but a keyboard user also needs to
+  // *land* somewhere useful. The message is the recovery path, so send focus there.
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
   return (
-    <main className="wrap">
+    <main className="wrap" id="main">
       <div className="plate">
         <section style={{ flex: "1 1 440px", minWidth: 0 }}>
           <Eyebrow label="Deep research engine" sheet="IF‑RES · v4" />
@@ -168,21 +181,24 @@ export default function EntryView({
 
               <div className="field-grid">
                 <div className="field">
-                  <label>Papers to read</label>
-                  <div className="seg">
-                    {PAPER_COUNTS.map((n) => (
-                      <label className="seg-opt" key={n}>
-                        <input
-                          type="radio"
-                          name="paperCount"
-                          value={n}
-                          checked={paperCount === n}
-                          onChange={() => setPaperCount(n)}
-                        />
-                        <span>{n}</span>
-                      </label>
-                    ))}
-                  </div>
+                  <fieldset>
+                    <legend>Papers to read</legend>
+                    <div className="seg">
+                      {PAPER_COUNTS.map((n) => (
+                        <label className="seg-opt" key={n}>
+                          <input
+                            type="radio"
+                            name="paperCount"
+                            value={n}
+                            checked={paperCount === n}
+                            onChange={() => setPaperCount(n)}
+                          />
+                          <span>{n}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <p className="field-help">More papers means a broader sweep and a longer run.</p>
                 </div>
                 <div className="field">
                   <label htmlFor="email">Email the deck (optional)</label>
@@ -194,23 +210,48 @@ export default function EntryView({
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     maxLength={320}
+                    autoComplete="email"
+                    aria-describedby="email-help"
                   />
+                  <p className="field-help" id="email-help">
+                    We send the .pptx when the run finishes. Optional — the deck is downloadable here either way.
+                  </p>
                 </div>
               </div>
 
               <div className="submit-row">
-                <button type="submit" className="btn btn-primary blueprint btn-generate" disabled={submitting}>
-                  <i className="corner tl" />
-                  <i className="corner tr" />
-                  <i className="corner bl" />
-                  <i className="corner br" />
-                  {submitting ? "Starting…" : "Generate deck"}
-                </button>
+                {signedIn === false ? (
+                  // A run costs model credits and minutes of worker time, so it is tied to
+                  // an account. The modal keeps the topic the visitor already typed.
+                  <SignInButton mode="modal">
+                    <button type="button" className="btn btn-primary blueprint btn-generate">
+                      <i className="corner tl" />
+                      <i className="corner tr" />
+                      <i className="corner bl" />
+                      <i className="corner br" />
+                      Sign in to generate
+                    </button>
+                  </SignInButton>
+                ) : (
+                  <button type="submit" className="btn btn-primary blueprint btn-generate" disabled={submitting || signedIn === undefined}>
+                    <i className="corner tl" />
+                    <i className="corner tr" />
+                    <i className="corner bl" />
+                    <i className="corner br" />
+                    {submitting ? "Starting…" : "Generate deck"}
+                  </button>
+                )}
                 <span className="submit-note">
-                  A few minutes · OpenAlex · .pptx with speaker notes
+                  {signedIn === false
+                    ? "Free account · your runs stay scoped to you"
+                    : "A few minutes · OpenAlex · .pptx with speaker notes"}
                 </span>
               </div>
-              {error && <p className="form-error">{error}</p>}
+              {error && (
+                <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+                  {error}
+                </p>
+              )}
             </form>
           </Blueprint>
 
@@ -267,8 +308,9 @@ export default function EntryView({
               Sample slide
             </div>
             <div
+              aria-hidden="true"
               style={{
-                border: "1px solid color-mix(in srgb, #f2f2f3 35%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--color-bg) 35%, transparent)",
                 padding: 16,
                 aspectRatio: "16 / 9",
                 display: "flex",
@@ -287,9 +329,9 @@ export default function EntryView({
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-                <span style={{ display: "block", width: 16, height: 22, background: "color-mix(in srgb, #f2f2f3 45%, transparent)" }} />
-                <span style={{ display: "block", width: 16, height: 38, background: "color-mix(in srgb, #f2f2f3 70%, transparent)" }} />
-                <span style={{ display: "block", width: 16, height: 30, background: "color-mix(in srgb, #f2f2f3 45%, transparent)" }} />
+                <span style={{ display: "block", width: 16, height: 22, background: "color-mix(in srgb, var(--color-bg) 45%, transparent)" }} />
+                <span style={{ display: "block", width: 16, height: 38, background: "color-mix(in srgb, var(--color-bg) 70%, transparent)" }} />
+                <span style={{ display: "block", width: 16, height: 30, background: "color-mix(in srgb, var(--color-bg) 45%, transparent)" }} />
                 <span style={{ marginLeft: "auto", fontSize: 9, opacity: 0.7, letterSpacing: "0.04em" }}>[2] [7]</span>
               </div>
             </div>
@@ -364,8 +406,8 @@ export default function EntryView({
               minWidth: 0,
               maxWidth: 420,
               padding: 20,
-              border: "1px solid color-mix(in srgb, #f2f2f3 34%, transparent)",
-              background: "color-mix(in srgb, #f2f2f3 6%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--color-bg) 34%, transparent)",
+              background: "color-mix(in srgb, var(--color-bg) 6%, transparent)",
             }}
           >
             <div
@@ -373,7 +415,7 @@ export default function EntryView({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "baseline",
-                fontSize: 10,
+                fontSize: 12,
                 letterSpacing: "0.16em",
                 textTransform: "uppercase",
                 color: "var(--color-accent-300)",
@@ -381,7 +423,7 @@ export default function EntryView({
               }}
             >
               <span>What the run records</span>
-              <span style={{ color: "color-mix(in srgb, #f2f2f3 62%, transparent)" }}>Every job</span>
+              <span style={{ color: "color-mix(in srgb, var(--color-bg) 62%, transparent)" }}>Every job</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {[
@@ -399,16 +441,16 @@ export default function EntryView({
                     justifyContent: "space-between",
                     gap: 12,
                     padding: "9px 0",
-                    borderBottom: "1px solid color-mix(in srgb, #f2f2f3 14%, transparent)",
+                    borderBottom: "1px solid color-mix(in srgb, var(--color-bg) 14%, transparent)",
                     fontSize: 12,
                   }}
                 >
                   <span>{k}</span>
-                  <span style={{ color: "color-mix(in srgb, #f2f2f3 62%, transparent)", textAlign: "right" }}>{v}</span>
+                  <span style={{ color: "color-mix(in srgb, var(--color-bg) 62%, transparent)", textAlign: "right" }}>{v}</span>
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 11, lineHeight: 1.5, margin: "12px 0 0", color: "color-mix(in srgb, #f2f2f3 66%, transparent)" }}>
+            <p style={{ fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", color: "color-mix(in srgb, var(--color-bg) 78%, transparent)" }}>
               The activity log streams all of it while the job runs, and stays with the finished deck.
             </p>
           </div>

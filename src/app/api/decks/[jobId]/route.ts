@@ -1,5 +1,6 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getDeckJson, getJob, listJobEvents } from "@/lib/jobs";
+import { canAccessJob, getDeckJson, getJob, listJobEvents } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
 
   const job = await getJob(jobId);
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+  // Someone else's run is indistinguishable from one that does not exist.
+  const { userId } = await auth();
+  if (!canAccessJob(job, userId)) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
   // `?since=<last event id>` lets the UI poll for only the new activity.
   const since = Number(new URL(request.url).searchParams.get("since") ?? 0);

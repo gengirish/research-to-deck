@@ -5,6 +5,7 @@ export type JobStage = "queued" | "searching" | "ingesting" | "retrieving" | "sy
 
 export interface JobRow {
   id: string;
+  user_id: string | null;
   topic: string;
   paper_count: number;
   status: JobStatus;
@@ -23,6 +24,8 @@ export interface JobRow {
 
 /** Where to send the finished deck. Absent for API callers who just poll the status endpoint. */
 export interface JobDelivery {
+  /** Clerk user id of whoever started the run. Omitted for email-originated jobs. */
+  userId?: string;
   notifyEmail?: string;
   /** Set when the job arrived over email, so the deck goes back as an in-thread reply. */
   replyInboxId?: string;
@@ -31,14 +34,27 @@ export interface JobDelivery {
 
 export async function createJob(id: string, topic: string, paperCount: number, delivery: JobDelivery = {}): Promise<void> {
   await getPool().query(
-    `INSERT INTO jobs (id, topic, paper_count, notify_email, reply_inbox_id, reply_message_id) VALUES ($1, $2, $3, $4, $5, $6)`,
-    [id, topic, paperCount, delivery.notifyEmail ?? null, delivery.replyInboxId ?? null, delivery.replyMessageId ?? null],
+    `INSERT INTO jobs (id, user_id, topic, paper_count, notify_email, reply_inbox_id, reply_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [id, delivery.userId ?? null, topic, paperCount, delivery.notifyEmail ?? null, delivery.replyInboxId ?? null, delivery.replyMessageId ?? null],
   );
+}
+
+/**
+ * Whether `userId` (null when signed out) may read this job.
+ *
+ * An ownerless job — one that arrived by email, or predates auth — is guarded only by
+ * its UUID, because the emailed download link carries no session. An owned job is
+ * private to its owner. Callers answer a refusal with 404, not 403, so the endpoint
+ * does not confirm that someone else's job id exists.
+ */
+export function canAccessJob(job: Pick<JobRow, "user_id">, userId: string | null): boolean {
+  return job.user_id === null || job.user_id === userId;
 }
 
 export async function getJob(id: string): Promise<JobRow | null> {
   const { rows } = await getPool().query<JobRow>(
-    `SELECT id, topic, paper_count, status, stage, progress, error, stats, deck_name,
+    `SELECT id, user_id, topic, paper_count, status, stage, progress, error, stats, deck_name,
             notify_email, reply_inbox_id, reply_message_id, notified_at, created_at, updated_at
        FROM jobs WHERE id = $1`,
     [id],

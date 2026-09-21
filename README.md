@@ -78,6 +78,10 @@ npm run worker                       # terminal 2: BullMQ worker
 | `PAPER_SOURCE` | worker | optional, default `openalex`. Set to `semanticscholar` to use the old provider. |
 | `OPENALEX_MAILTO` | worker | recommended. A contact address, **not** an API key: it opts you into OpenAlex's polite pool (10 req/s, 100k/day) instead of the slower anonymous pool. |
 | `SEMANTIC_SCHOLAR_API_KEY` | worker | only read when `PAPER_SOURCE=semanticscholar`. That provider's keyless pool answers 429 to effectively every request, which is why it is no longer the default. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | app | Clerk publishable key. Provisioned by the Clerk integration on the Vercel Marketplace |
+| `CLERK_SECRET_KEY` | app | Clerk secret key, same source. The worker never needs it — it only ever reads `jobs.user_id` as an opaque string |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | app | optional, default `/sign-in` — keep in step with `src/app/sign-in` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | app | optional, default `/sign-up` |
 | `DATABASE_URL` | app + worker | Postgres with the `vector` extension (Neon or Supabase in prod) |
 | `REDIS_URL` | app + worker | `rediss://` for TLS (e.g. Upstash) |
 | `PYTHON_BIN` | worker | interpreter with python-pptx (`python3` in the Docker image) |
@@ -113,6 +117,16 @@ curl "http://localhost:3000/api/decks/<jobId>?since=7"
 # download when status is "done"
 curl -o deck.pptx http://localhost:3000/api/decks/<jobId>/download
 ```
+
+**`POST /api/decks` requires a signed-in Clerk session** and answers `401 {"error":"Sign in to
+generate a deck"}` without one, because a run reads up to 100 papers and bills model usage. The
+browser sends the session cookie automatically; a script needs one too, so the `curl` calls below
+work as written only against a deployment with Clerk unconfigured, or with a session cookie attached.
+
+Status and download are guarded by the job UUID *and* ownership: a job you created is visible only
+to you, and a job created from an inbound email has no owner, so its UUID stays its only credential
+(that is what keeps the emailed download link working). A job belonging to someone else answers
+`404`, not `403`, so the endpoint never confirms that another user's job id exists.
 
 `paperCount` is 10–100 (default 50). Stages: `queued → searching → ingesting → retrieving → synthesizing → rendering → done | failed`.
 
@@ -165,8 +179,33 @@ work happens; retries of a claimed event return `200 {"status":"duplicate"}` wit
 Run the whole flow end to end and save the deck to `smoke-deck.pptx`:
 
 ```bash
-npm run smoke -- http://localhost:3000 "retrieval-augmented generation evaluation" 50
+# SMOKE_COOKIE is the `__session=…` cookie of a signed-in browser session for this
+# origin; creating and reading a job both need one.
+SMOKE_COOKIE="__session=..." npm run smoke -- http://localhost:3000 "retrieval-augmented generation evaluation" 50
 ```
+
+## Authentication (Clerk)
+
+Clerk is installed as a native Vercel Marketplace integration, so the two keys are provisioned onto
+the project and usage bills through Vercel. `src/proxy.ts` runs `clerkMiddleware()` on every request
+and deliberately protects nothing: `auth.protect()` answers a signed-out request with an opaque 404,
+which is wrong for a documented JSON API, and the per-job routes have to stay reachable without a
+session. The rules therefore live in the handlers:
+
+| Route | Rule |
+|---|---|
+| `POST /api/decks` | needs a session; the Clerk user id is stored as `jobs.user_id` |
+| `GET /api/decks/:id` | owner only; `404` otherwise |
+| `GET /api/decks/:id/download` | owner only; `404` otherwise |
+| `POST /api/webhooks/agentmail` | no session — authenticated by its Svix signature |
+
+`jobs.user_id` is nullable, and NULL means *ownerless*: a job that arrived by email, or one created
+before auth existed. `canAccessJob` (`src/lib/jobs.ts`) lets anyone holding the UUID read those,
+which is what keeps the emailed download link and pre-existing job ids working. Widening that rule
+would break inbound email; narrowing it needs the email to carry a session instead.
+
+The worker is untouched by any of this — it never authenticates, and treats `user_id` as an opaque
+string it does not read.
 
 ## Deploy
 
@@ -174,7 +213,11 @@ Live: **https://research-to-deck.vercel.app** (app on Vercel, worker on Fly.io).
 
 1. **Database:** on the Vercel project, Storage → Create Database → Neon (free tier), connected to the project. That sets `DATABASE_URL`. Copy the value into `.env.local` and run `npm run db:migrate`.
 2. **Redis:** Storage → Create Database → Upstash → **Redis** (not QStash or Vector), connected to the project. That sets `REDIS_URL`. Copy the `rediss://` value into `.env.local` too.
-3. **Worker:** `fly apps create research-to-deck-worker`, then stage the secrets and deploy the container from `fly.toml` / `Dockerfile.worker`:
+3. **Auth:** on the Vercel project, Integrations → Marketplace → **Clerk** → Install, connected to the
+   project. That provisions `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` across the
+   environments and bills through Vercel. `vercel integration add clerk` cannot finish this one — the
+   CLI hands off to the dashboard. Then `vercel env pull .env.local` for local development.
+4. **Worker:** `fly apps create research-to-deck-worker`, then stage the secrets and deploy the container from `fly.toml` / `Dockerfile.worker`:
 
    ```bash
    # secrets.env: DATABASE_URL, REDIS_URL, VOYAGE_API_KEY, ANTHROPIC_API_KEY,
@@ -187,7 +230,7 @@ Live: **https://research-to-deck.vercel.app** (app on Vercel, worker on Fly.io).
 
    `fly secrets set` restarts the machine on its own, so changing a key needs no redeploy.
 
-4. **App:** `vercel link` then `vercel deploy --prod`. The app only needs `DATABASE_URL` and `REDIS_URL`, both injected by the two integrations; the AI keys live on the worker alone. Once the project is connected to GitHub, every push to `main` deploys.
+5. **App:** `vercel link` then `vercel deploy --prod`. The app only needs `DATABASE_URL` and `REDIS_URL`, both injected by the two integrations; the AI keys live on the worker alone. Once the project is connected to GitHub, every push to `main` deploys.
 
 Two things that trip people up:
 
@@ -221,6 +264,8 @@ npm run test:py     # python-pptx renderer: slide count, notes on every slide, c
 
 ```
 src/app/api/decks/            POST create, GET status, GET download
+src/app/sign-in, sign-up/     Clerk <SignIn />/<SignUp /> inside the Industry sheet
+src/proxy.ts                  clerkMiddleware() (Next 16's renamed middleware convention)
 src/app/page.tsx              view state + polling (entry / running / result)
 src/components/                Industry design-system UI: job sheet, run view, deck viewer
 src/lib/paper.ts              provider-agnostic Paper shape + content-first selection
@@ -241,7 +286,7 @@ src/lib/agentmailWebhook.ts   Svix signature verification + inbound parsing
 src/app/api/webhooks/         inbound AgentMail webhook
 worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
-db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json)
+db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json, job owner)
 ```
 
 ### Paper search provider

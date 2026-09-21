@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Blueprint } from "./Blueprint";
+import ToastDock, { ToastMessage } from "./Toast";
 import { JobStatus, pad2, RenderDeck, slideRefs, splitReference } from "./deck";
 
 /** "Lewis, Perez, Piktus, et al. (2020)" — authors and year from a formatted reference. */
@@ -28,6 +29,13 @@ function confidenceLabel(n: number): string {
 
 export default function ResultView({ job, deck, onReset }: { job: JobStatus; deck: RenderDeck; onReset: () => void }) {
   const [active, setActive] = useState(0);
+  /** The download confirmation. `null` when there is nothing to say. */
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const toastSeq = useRef(0);
+  const railRef = useRef<HTMLDivElement>(null);
+  const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  /** Set when a key moved the selection, so focus follows only then — not on click. */
+  const focusActive = useRef(false);
   const slide = deck.slides[active];
   const refs = slideRefs(slide);
   const byNumber = new Map(deck.references.map((r) => [r.n, r.text]));
@@ -35,6 +43,62 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
   // Coverage is this slide's source count against the best-covered slide in the deck.
   const maxRefs = Math.max(1, ...deck.slides.map((s) => slideRefs(s).length));
   const coverage = Math.round((refs.length / maxRefs) * 100);
+
+  // How much rail is still off to the right. Drives the edge fade, so the affordance
+  // disappears once there is nothing left to scroll to.
+  const syncMore = useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const more = Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft);
+    el.style.setProperty("--more", `${Math.min(more, 32)}px`);
+  }, []);
+
+  useEffect(() => {
+    syncMore();
+    const el = railRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(syncMore);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [syncMore, deck.slides.length]);
+
+  // Roving tabindex: the rail is one tab stop, and the arrows move within it.
+  useEffect(() => {
+    if (!focusActive.current) return;
+    focusActive.current = false;
+    thumbRefs.current[active]?.focus();
+  }, [active]);
+
+  function onRailKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const last = deck.slides.length - 1;
+    const next =
+      e.key === "ArrowRight" ? Math.min(active + 1, last)
+      : e.key === "ArrowLeft" ? Math.max(active - 1, 0)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    focusActive.current = true;
+    setActive(next);
+  }
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  /**
+   * The download itself is the browser's job — the anchor is left alone so
+   * middle-click, "save link as" and the keyboard all keep working. This only
+   * says that it started, because otherwise the click produces no visible
+   * change anywhere on the page.
+   */
+  function onDownload() {
+    toastSeq.current += 1;
+    setToast({
+      id: toastSeq.current,
+      label: "Download started",
+      text: `${deck.slides.length} slides with ${deck.references.length} references — check your browser's downloads for the .pptx.`,
+    });
+  }
 
   const t = job.stats.timings ?? {};
   const ingest = job.stats.ingest;
@@ -48,13 +112,13 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
   ];
 
   return (
-    <main className="wrap" style={{ paddingTop: 36 }}>
+    <main className="wrap" id="main" style={{ paddingTop: 36 }}>
       <div className="result-head">
         <div>
           <div className="panel-label" style={{ marginBottom: 8 }}>
             Deck ready · {deck.slides.length} slides · {deck.references.length} references
           </div>
-          <h2 className="result-title">{deck.title}</h2>
+          <h1 className="result-title">{deck.title}</h1>
           {deck.subtitle && (
             <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--color-neutral-700)", maxWidth: "60ch" }}>
               {deck.subtitle}
@@ -66,7 +130,7 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
             New run
           </button>
           {job.downloadUrl && (
-            <a className="btn btn-primary blueprint" href={job.downloadUrl} style={{ padding: "11px 22px" }}>
+            <a className="btn btn-primary blueprint" href={job.downloadUrl} onClick={onDownload} style={{ padding: "12px 22px" }}>
               <i className="corner tl" />
               <i className="corner tr" />
               <i className="corner bl" />
@@ -77,31 +141,55 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
         </div>
       </div>
 
-      <div className="thumbs">
-        {deck.slides.map((s, i) => {
-          const n = slideRefs(s).length;
-          return (
-            <button
-              type="button"
-              key={s.title + i}
-              className={i === active ? "thumb thumb-on" : "thumb"}
-              onClick={() => setActive(i)}
-              aria-current={i === active}
-            >
-              <span className="thumb-head">
-                <span>{pad2(i + 1)}</span>
-                <span className="cites">{n === 1 ? "1 src" : `${n} srcs`}</span>
-              </span>
-              <span className="thumb-title">{s.title}</span>
-            </button>
-          );
-        })}
+      <div className="thumb-rail">
+        <div
+          className="thumbs"
+          ref={railRef}
+          onScroll={syncMore}
+          onKeyDown={onRailKeyDown}
+          role="tablist"
+          aria-label="Slides"
+        >
+          {deck.slides.map((s, i) => {
+            const n = slideRefs(s).length;
+            return (
+              <button
+                type="button"
+                key={s.title + i}
+                ref={(el) => {
+                  thumbRefs.current[i] = el;
+                }}
+                className={i === active ? "thumb thumb-on" : "thumb"}
+                onClick={() => setActive(i)}
+                role="tab"
+                aria-selected={i === active}
+                aria-controls="slide-panel"
+                tabIndex={i === active ? 0 : -1}
+              >
+                <span className="thumb-head">
+                  <span>{pad2(i + 1)}</span>
+                  <span className="cites">{n === 1 ? "1 src" : `${n} srcs`}</span>
+                </span>
+                <span className="thumb-title">{s.title}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="result-cols">
         <div className="result-main">
           <Blueprint style={{ padding: 0, background: "var(--color-bg)" }}>
-            <div className="slide">
+            {/* Keyed on the selection so picking a thumbnail replays the fade. The
+                animation is opacity only and the frame around it never remounts, so
+                the 16:9 box holds its size and nothing on the page moves. */}
+            <div
+              className="slide slide-crossfade"
+              id="slide-panel"
+              role="tabpanel"
+              aria-label={slide.title}
+              key={active}
+            >
               <div className="slide-head">
                 <span className="panel-label">{deck.topic}</span>
                 <span className="count">
@@ -146,7 +234,7 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
           <Blueprint style={{ padding: 16 }}>
             <div className="panel-head">
               <span className="panel-label">Sources on this slide</span>
-              <span className="tag tag-accent" style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 10 }}>
+              <span className="tag tag-accent" style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 12 }}>
                 {confidenceLabel(refs.length)}
               </span>
             </div>
@@ -156,7 +244,7 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
                 <span>{coverage}%</span>
               </div>
               <div className="bar-mini">
-                <div style={{ width: `${coverage}%` }} />
+                <div style={{ transform: `scaleX(${coverage / 100})` }} />
               </div>
             </div>
             <div className="source-list">
@@ -196,12 +284,14 @@ export default function ResultView({ job, deck, onReset }: { job: JobStatus; dec
                 ))}
               </tbody>
             </table>
-            <p style={{ fontSize: 11, lineHeight: 1.5, margin: "12px 0 0", color: "var(--color-neutral-600)" }}>
+            <p style={{ fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", color: "var(--color-text-muted)" }}>
               {deck.stats_line}
             </p>
           </Blueprint>
         </aside>
       </div>
+
+      <ToastDock toast={toast} onDismiss={dismissToast} />
     </main>
   );
 }

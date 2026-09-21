@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isEmailEnabled } from "@/lib/email";
@@ -15,6 +16,12 @@ const CreateDeckSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // A run reads up to 100 papers and bills Claude + Voyage usage, so it needs a session.
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Sign in to generate a deck" }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -32,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   const jobId = randomUUID();
-  await createJob(jobId, topic, paperCount, { notifyEmail: email });
+  await createJob(jobId, topic, paperCount, { userId, notifyEmail: email });
   try {
     await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
     await logJobEvent(jobId, "queued", "Request accepted and queued for a worker", { detail: { topic, paperCount } });

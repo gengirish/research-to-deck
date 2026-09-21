@@ -1,0 +1,239 @@
+/* State layer — Phase 4.
+   Loading skeletons, toasts, empty and error states. New classes only; it must not
+   redefine anything globals.css already owns. */
+
+/* ── Skeletons ──────────────────────────────────────────────────────────────
+   A skeleton is a drawing of the row that is coming, not a spinner. The markup
+   is the real <table class="table">, so the column widths, cell padding and
+   hairlines are literally the same rules — when the first paper lands, only the
+   bar inside each cell is replaced and the grid does not move.
+
+   The shimmer is a highlight swept across each bar with `transform` alone. No
+   `width`, no `background-position` on a repainted gradient, nothing that can
+   reflow the panel it sits in. */
+
+.skel {
+  /* Own stacking/clipping context so a sweeping highlight cannot escape a cell. */
+  position: relative;
+}
+
+.skel-bar {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  height: 12px;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+/* The second line of a two-line cell: shorter and lighter, like a year under a
+   title, so the skeleton reads as a row of prose rather than a bar chart. */
+.skel-bar-sub {
+  height: 10px;
+  margin-top: 6px;
+  width: 44%;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.skel-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Mixed from --color-text, not --color-bg: the highlight has to read as
+     *lighter than the bar* in light mode and in dark, and only the text token
+     flips with the theme in the direction that keeps that true. */
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: skel-sweep 1400ms var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) infinite;
+}
+
+/* Stagger the rows so the panel reads as one surface being drawn, not five
+   independent bars pulsing in lockstep. Capped at five steps — the skeleton is
+   never longer than that. */
+.skel-row:nth-child(2) .skel-bar::after { animation-delay: 80ms; }
+.skel-row:nth-child(3) .skel-bar::after { animation-delay: 160ms; }
+.skel-row:nth-child(4) .skel-bar::after { animation-delay: 240ms; }
+.skel-row:nth-child(5) .skel-bar::after { animation-delay: 320ms; }
+
+@keyframes skel-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* An indeterminate meter, for the moment between "accepted" and the first poll
+   answering with a real percentage. Same 6px rule as `.meter`, swept by
+   transform so it never reflows the row. */
+.meter-sweep {
+  position: relative;
+  overflow: hidden;
+}
+.meter-sweep > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: var(--color-accent);
+  animation: meter-sweep 1400ms var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) infinite;
+}
+@keyframes meter-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+/* ── View transition ────────────────────────────────────────────────────────
+   The entry sheet, the hand-off and the run view each mount under a keyed
+   wrapper, so a swap plays this once. Opacity plus a 8px lift — both composited,
+   neither able to move a neighbour. */
+
+.view-fade {
+  animation: view-fade var(--dur-slow, 320ms) var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+@keyframes view-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The slide canvas on thumbnail selection. Opacity only: the slide is a scale
+   model of the .pptx and must not appear to move when it is only being swapped. */
+.slide-crossfade {
+  animation: slide-crossfade var(--dur, 220ms) var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+@keyframes slide-crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Hand-off ───────────────────────────────────────────────────────────────
+   Between "the API accepted the run" and the first status poll. It carries the
+   topic at the same size and position the run view will, so the crossfade lands
+   the heading in place rather than replacing it. */
+
+.handoff-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* An empty panel that is going to stay empty — a finished absence, not a wait.
+   No shimmer: a skeleton would promise rows that are never coming. */
+.empty-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* ── Recovery ───────────────────────────────────────────────────────────────
+   A failed run must offer a next step, not just a reason. */
+
+.recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────────
+   Confirmation for an action whose result happens outside the page — the
+   browser's own download. It announces politely, never takes focus, and the
+   close control is a full 44px target.
+
+   The dock is `pointer-events: none` so a dismissed-but-animating toast cannot
+   swallow a click meant for the page under it. */
+
+.toast-dock {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-left: 3px solid var(--color-accent-700);
+  animation: toast-in var(--dur, 220ms) var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+
+.toast-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A word, not a colour: the accent bar alone would say nothing. */
+.toast-label {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+}
+
+.toast-text {
+  display: block;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.toast-close {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-divider);
+  border-radius: 0;
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--color-text); border-color: var(--color-accent-700); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   globals.css already collapses every duration to 0.01ms, which would leave a
+   looping sweep flickering at its end state. Name the animations off instead:
+   the skeleton becomes a static row of bars, the transitions become cuts. */
+
+@media (prefers-reduced-motion: reduce) {
+  .skel-bar::after,
+  .meter-sweep > span,
+  .view-fade,
+  .slide-crossfade,
+  .toast {
+    animation-name: none;
+  }
+  /* Without the sweep the indeterminate meter would read as empty, so fill it. */
+  .meter-sweep > span { width: 100%; }
+}

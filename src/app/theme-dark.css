@@ -1,0 +1,120 @@
+/* Dark theme layer — Phase 5.
+   Imported after globals.css so `@media (prefers-color-scheme: dark) { :root { … } }`
+   redefines the semantic tokens. Redefine tokens, not components: anything that reads
+   var(--color-…) then follows automatically.
+
+   Method (docs/ui-ux-improvement-plan.md §Phase 5, MASTER.md §2.1/§2.2):
+
+   - Not an inversion. The ground is a desaturated steel graphite, the ramps are
+     re-tuned tonal variants, and every pairing in §2.2 is re-measured against the
+     dark ground — light-mode ratios do not carry over. `scripts/check-contrast.mjs`
+     asserts the same law independently for this block.
+   - Both ramps run the other way round. In light, `--color-*-100` is the lightest
+     step and `-900` the darkest; on a dark ground the *tint* end must be the dark
+     end, so `-100` is the quietest near-ground step and `-900` the brightest. Every
+     component pairing in globals.css keeps its meaning without being touched:
+     `.tag-accent` stays a tint ground with legible type, `.btn-primary` stays a
+     filled block with reversed type, `a:hover` still brightens.
+   - Three places need a scope rather than a token, and only three; they are listed
+     with their reasons below. */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Tells the UA to render form controls, scrollbars and the caret dark, so the
+       parts of the page we do not paint follow the parts we do. */
+    color-scheme: dark;
+
+    --color-bg: #14191e;
+    --color-surface: #1d242b;
+    --color-text: #e6e9ec;
+    --color-accent: #6e93b8;
+    /* 1.88 : 1 against the ground — the light divider sits at 1.38 : 1, so hairlines
+       are, if anything, easier to see here than they are on paper. */
+    --color-divider: color-mix(in srgb, #e6e9ec 22%, transparent);
+
+    /* Neutral ramp, darkest step first. -500 (2.90 : 1) and -600 (4.22 : 1) still
+       fail AA against the ground on purpose: they remain decoration tokens in both
+       themes, and check-contrast.mjs asserts that they keep failing. */
+    --color-neutral-100: #1b2026;
+    --color-neutral-200: #232930;
+    --color-neutral-300: #2e353d;
+    --color-neutral-400: #3c444d;
+    --color-neutral-500: #5a636d;
+    --color-neutral-600: #737d87;
+    --color-neutral-700: #a6afb8;
+    --color-neutral-800: #c7ced5;
+    --color-neutral-900: #e4e9ed;
+
+    /* --color-text-muted is declared as var(--color-neutral-700) in globals.css, so
+       it re-resolves here on its own. 7.95 : 1 — the muted-text floor holds. */
+
+    /* Accent ramp, darkest step first. -700 is the link / primary-button tone at
+       9.03 : 1; -100 is the tint ground under .tag-accent, .notice and .thumb-on. */
+    --color-accent-100: #18242f;
+    --color-accent-200: #1f2d3a;
+    --color-accent-300: #2a3c4c;
+    --color-accent-400: #3b5164;
+    --color-accent-500: #56748f;
+    --color-accent-600: #6b8fb0;
+    --color-accent-700: #9cbddc;
+    --color-accent-800: #bcd5ee;
+    --color-accent-900: #dcebf9;
+
+    /* The shadow tokens are tuned for a paper ground; a 14%-of-graphite shadow is
+       invisible on graphite. Kept subordinate to the hairline, per MASTER.md §2.1
+       ("hairlines, never shadows") — these only stop a raised sheet from floating
+       with no edge at all. */
+    --shadow-sm: 0 1px 2px color-mix(in srgb, #000000 55%, transparent);
+    --shadow-md: 0 3px 10px color-mix(in srgb, #000000 62%, transparent);
+    --shadow-lg: 0 12px 32px color-mix(in srgb, #000000 70%, transparent);
+  }
+
+  /* — 1. The reversed field ————————————————————————————————————————————————
+     .reverse is an *inverted island*: globals.css paints it with
+     `background: var(--color-accent-900); color: var(--color-bg)` and its children
+     hard-code `#f2f2f3` at 6/24/30/62/80/86% for the hatch, the rules and the lede.
+     Flipping the ramp globally would hand it a bright ground and leave that near-white
+     type on top of it — a grey-on-grey block at ~1.1 : 1.
+
+     So the island keeps its own local copies of the four tokens it paints with. This
+     is still token redefinition, not a restyle: not one declaration in globals.css is
+     overridden, the cascade simply resolves the same vars differently inside .reverse.
+
+     Ground #2b3b49 sits 1.54 : 1 off the page ground, so the panel reads as a raised
+     steel plate rather than dissolving into it, and carries its blueprint hairline. */
+  .reverse {
+    --color-accent-900: #2b3b49; /* the panel ground, and .btn-invert's label */
+    --color-bg: #eef2f5; /* the panel's paper: 10.22 : 1 on that ground */
+    --color-accent-100: #dfe9f2; /* .btn-invert:hover ground — 9.36 : 1 with the label */
+    --color-accent-300: #a8c8e6; /* panel labels and eyebrows — 6.62 : 1 */
+    --color-divider: color-mix(in srgb, #eef2f5 30%, transparent);
+  }
+
+  /* — 2. The blueprint grid ————————————————————————————————————————————————
+     .plate draws its grid as accent at 12% over the ground. On paper that lands at
+     1.14 : 1; the same 12% over graphite lands at 1.18 : 1 but reads weaker, because
+     a dark surround compresses apparent contrast. 16% restores the drawn weight
+     (1.26 : 1) without the lines becoming a foreground element. Same construction,
+     same token, one number re-tuned for the ground it is drawn on. */
+  .plate {
+    background-image:
+      repeating-linear-gradient(to right, color-mix(in srgb, var(--color-accent) 16%, transparent) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 16%, transparent) 0 1px, transparent 1px 34px);
+  }
+
+  /* — 3. The duotone figure ————————————————————————————————————————————————
+     `mix-blend-mode: color` takes hue and saturation from the accent overlay and
+     *luminosity from the backdrop* — which is the photograph. Re-tuning a token
+     therefore cannot darken it: in dark mode the figure would stay at its full paper
+     luminance and sit on the page as a lit rectangle.
+
+     The photo carries an inline `filter`, so filtering it here would need !important.
+     Compositing it at 78% against the page ground instead needs no override at all,
+     leaves the accent tint doing its job, and keeps the figure's internal contrast. */
+  .duotone {
+    background: var(--color-bg);
+  }
+  .duotone img {
+    opacity: 0.78;
+  }
+}

@@ -16,8 +16,11 @@ npx vitest run tests/chunk.test.ts            # single file
 npx vitest run -t "reference numbering"       # single test by name
 npm run test:py                # unittest over python/test_*.py (needs python-pptx)
 python -m unittest python.test_render_deck.ClassName.test_name   # single python test
+npm run test:e2e               # playwright, tests/e2e/specs/**; builds and starts the app itself
+npm run test:e2e -- specs/result-deck.spec.ts    # single file
+npm run test:e2e:ui            # watch mode; test:e2e:report opens the last HTML report
 
-npm run smoke -- http://localhost:3000 "some topic" 50   # full end-to-end, writes smoke-deck.pptx
+SMOKE_COOKIE="__session=…" npm run smoke -- http://localhost:3000 "some topic" 50   # end-to-end; the cookie is required now that runs need a session
 
 # deploy (see README "Deploy" for first-time setup)
 fly deploy --app research-to-deck-worker --remote-only --ha=false
@@ -56,6 +59,13 @@ streams it straight out.
   (`src/lib/citations.ts`) strips unknown keys, drops uncited bullets, and returns an `issues` list;
   `synthesizeDeck` then gives Claude exactly one repair pass and keeps whichever draft needed fewer
   fixes. A bullet without a valid citation must never reach the deck.
+- **Auth boundary.** `POST /api/decks` requires a Clerk session and stamps `jobs.user_id`; the status
+  and download routes call `canAccessJob` and answer `404` (never `403`) for someone else's job. A
+  NULL `user_id` means an ownerless job — email-originated or pre-auth — readable by whoever holds the
+  UUID, which is what keeps the emailed download link alive. `src/proxy.ts` (Next 16's renamed
+  middleware convention; Clerk 7 supports it) only establishes the session, it protects no route,
+  because `auth.protect()` would answer the JSON API with an opaque 404. The AgentMail webhook is
+  authenticated by its Svix signature, not by Clerk, and the worker never authenticates at all.
 - **Count limits** (8–12 slides, 3–5 bullets) live in `DECK_RULES`, not in the Zod schema — the
   schema stays loose so a near-miss can be repaired instead of rejected. Change them in one place.
 - **Retrieval scoping.** The vector query in `src/lib/retrieval.ts` uses a `MATERIALIZED` CTE to force
@@ -67,6 +77,24 @@ streams it straight out.
   abstract-only rather than disappearing (`content_source` records which).
 - **Reference numbers are assigned in order of first appearance** in `toRenderDeck`, and only cited
   papers appear on the reference slides.
+
+### E2E tests
+
+`tests/e2e` is Playwright and is **excluded from vitest** (`vitest.config.ts`); `npm test` and
+`npm run test:e2e` are separate suites. `playwright.config.ts` runs `next build && next start` on
+:3100 itself — not `next dev`, because Next 16 refuses a second dev server for a directory that
+already has one. `E2E_BASE_URL` points the suite at an existing server instead.
+
+Two seams are faked, both for reasons that will not go away: the app cannot render without a Clerk
+publishable key and a signed-in session cannot be forged, so the server gets a synthetic key and the
+browser a stubbed `clerk.browser.js`; and the pipeline needs a worker, Postgres, Redis and model
+spend, so `/api/decks*` is intercepted and replayed from a canned timeline. `POST /api/decks`
+therefore answers 401 in-browser however the stub is set — `specs/api-contract.spec.ts` asserts the
+real boundary with nothing mocked. `tests/e2e/README.md` has the full rationale; read it before
+loosening a locator or adding a `data-testid`.
+
+`tests/e2e/fixtures/deckData.ts` mirrors the `GET /api/decks/[jobId]` payload. Change the route's
+shape and you must change it too, or the journey specs stay green while production breaks.
 
 ### Node ↔ Python boundary
 

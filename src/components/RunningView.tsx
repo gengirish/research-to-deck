@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
-import { Blueprint, SheetHead } from "./Blueprint";
+import { Blueprint, Corners, SheetHead } from "./Blueprint";
+import PaperSkeleton from "./PaperSkeleton";
 import { clock, JobEvent, JobStatus, pad2, PHASES, phaseIndex, stripCounter } from "./deck";
 
 const MARKS = { done: "✓", active: "▸", todo: "·", failed: "×" } as const;
+
+/** What each mark means, for screen readers — the glyph alone says nothing. */
+const STATE_WORD = { done: "done", active: "in progress", todo: "pending", failed: "failed" } as const;
 
 /**
  * Each phase's headline number, taken from whatever the run has recorded so far.
@@ -36,12 +40,18 @@ export default function RunningView({
   job,
   events,
   elapsed,
+  stale,
   onCancelView,
+  onRetry,
 }: {
   job: JobStatus;
   events: JobEvent[];
   elapsed: string;
+  /** Polling has missed three consecutive times. The run itself is unaffected. */
+  stale: boolean;
   onCancelView: () => void;
+  /** Re-submit the same topic, paper count and email. Offered only on a failure. */
+  onRetry: () => void;
 }) {
   const logRef = useRef<HTMLOListElement>(null);
   const pinned = useRef(true);
@@ -70,20 +80,34 @@ export default function RunningView({
   const total = job.stats.papers_found ?? null;
 
   return (
-    <main className="wrap">
+    <main className="wrap" id="main">
       <div className="run-head">
         <span>{failed ? "Run failed" : "Run in progress"}</span>
         <span className="job">Job #{job.jobId.slice(0, 8)}</span>
         <span className="job">Elapsed {elapsed}</span>
       </div>
-      <h2 className="run-title">{job.topic}</h2>
+      <h1 className="run-title">{job.topic}</h1>
       <p className="run-sub">
         {total ? `${total} papers` : "Screening"} ·{" "}
         {failed ? "the log below shows where it stopped" : "you can leave this page open; the run continues on the worker"}
       </p>
 
-      <div className={failed ? "meter failed" : "meter"}>
-        <div style={{ width: `${job.progress}%` }} />
+      {stale && (
+        <p className="notice" role="status">
+          Lost contact with the run — still retrying. The worker keeps going regardless; this page will catch up.
+        </p>
+      )}
+
+      <div
+        className={failed ? "meter failed" : "meter"}
+        role="progressbar"
+        aria-label="Run progress"
+        aria-valuenow={job.progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${job.progress}% — ${failed ? "stopped" : PHASES[current].label}`}
+      >
+        <div style={{ transform: `scaleX(${job.progress / 100})` }} />
       </div>
       <div className="meter-legend">
         <span>{failed ? "Stopped" : PHASES[current].label}</span>
@@ -92,20 +116,45 @@ export default function RunningView({
 
       <div className="run-cols">
         <div className="run-left">
-          {PHASES.map((phase, i) => {
-            const state = failed && i === current ? "failed" : i < current ? "done" : i === current ? "active" : "todo";
-            return (
-              <div className={`phase phase-${state}`} key={phase.key}>
-                <span className="mark">{MARKS[state]}</span>
-                <span className="label">{phase.label}</span>
-                <span className="stat">{phaseStat(phase.key, job, papers.length, i <= current)}</span>
-              </div>
-            );
-          })}
-          {failed && job.error && <p className="form-error">{job.error}</p>}
-          <button type="button" className="btn btn-secondary" style={{ marginTop: 22 }} onClick={onCancelView}>
-            {failed ? "Start another run" : "Back to the job sheet"}
-          </button>
+          <ol className="phase-list">
+            {PHASES.map((phase, i) => {
+              const state = failed && i === current ? "failed" : i < current ? "done" : i === current ? "active" : "todo";
+              return (
+                <li
+                  className={`phase phase-${state}`}
+                  key={phase.key}
+                  aria-current={state === "active" ? "step" : undefined}
+                >
+                  {/* The mark carries the state for anyone who cannot use the colour. */}
+                  <span className="mark" aria-hidden="true">
+                    {MARKS[state]}
+                  </span>
+                  <span className="label">{phase.label}</span>
+                  <span className="vh">{STATE_WORD[state]}</span>
+                  <span className="stat">{phaseStat(phase.key, job, papers.length, i <= current)}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {failed && job.error && (
+            <p className="form-error" role="alert">
+              {job.error}
+            </p>
+          )}
+          {/* Every error carries a recovery path. On a failure the primary action is
+              running it again — same topic, same count, same email — so the secondary
+              "start another run" stays subordinate and there is still one primary CTA. */}
+          <div className="recovery">
+            {failed && (
+              <button type="button" className="btn btn-primary blueprint" onClick={onRetry}>
+                <Corners />
+                Retry this topic
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={onCancelView}>
+              {failed ? "Start another run" : "Back to the job sheet"}
+            </button>
+          </div>
         </div>
 
         <Blueprint className="run-right">
@@ -116,10 +165,13 @@ export default function RunningView({
               {total ? ` of ${total}` : ""}
             </span>
           </div>
-          {papers.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--color-neutral-700)", margin: 0 }}>
-              Waiting for the first paper to come back from OpenAlex…
-            </p>
+          {papers.length === 0 && failed ? (
+            /* A skeleton promises something is coming. Nothing is: say so instead. */
+            <p className="empty-note">None — the run stopped before any paper was read.</p>
+          ) : papers.length === 0 ? (
+            /* Not a sentence: a drawing of the rows that are coming, so the panel
+               does not resize the moment the first `ingesting` event lands. */
+            <PaperSkeleton />
           ) : (
             <table className="table">
               <thead>
@@ -133,13 +185,13 @@ export default function RunningView({
               <tbody>
                 {papers.map((p) => (
                   <tr key={p.n}>
-                    <td style={{ color: "var(--color-neutral-600)", fontSize: 12 }}>{p.n}</td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: 12 }}>{p.n}</td>
                     <td>
                       <span style={{ display: "block", lineHeight: 1.3 }}>{p.title}</span>
-                      {p.year && <span style={{ fontSize: 11, color: "var(--color-neutral-600)" }}>{p.year}</span>}
+                      {p.year && <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>{p.year}</span>}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>{p.venue}</td>
-                    <td style={{ textAlign: "right", fontSize: 11 }}>
+                    <td style={{ textAlign: "right", fontSize: 12 }}>
                       <span className={p.source === "full text" ? "tag tag-accent" : "tag tag-neutral"}>{p.source}</span>
                     </td>
                   </tr>
@@ -153,7 +205,15 @@ export default function RunningView({
       <Blueprint style={{ marginTop: 34, background: "var(--color-bg)" }}>
         <SheetHead title="Activity log — everything the worker is doing" marks={[`${events.length} entries`]} />
         <div style={{ padding: "12px 18px 16px" }}>
-          <ol className="log" ref={logRef} onScroll={(e) => {
+          <ol
+            className="log"
+            ref={logRef}
+            tabIndex={0}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label="Activity log"
+            onScroll={(e) => {
             const el = e.currentTarget;
             pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
           }}>

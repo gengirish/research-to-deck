@@ -1,0 +1,180 @@
+/* Motion layer — Phase 6.
+   Imported after globals.css, so same-specificity rules here win. Motion tokens and
+   any transition/animation overrides live here; globals.css keeps layout and colour.
+   `prefers-reduced-motion` is honoured globally at the end of globals.css. */
+
+/* ── Tokens ─────────────────────────────────────────────────────────────────
+   MASTER.md §2.6. One rhythm for the whole app: hover/press is --dur-fast, a
+   state change or crossfade is --dur, a view transition is --dur-slow.
+
+   Exits are not enters played backwards. Something leaving should get out of the
+   way faster than it arrived (`exit-faster-than-enter`), so each enter duration
+   has a matching exit at ~60–70% of it, on an ease that starts fast.
+   ── */
+:root {
+  --dur-fast: 150ms;
+  --dur: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+
+  /* exits — 100/150 = 67%, 150/220 = 68%, 200/320 = 63% */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --dur-fast-exit: 100ms;
+  --dur-exit: 150ms;
+  --dur-slow-exit: 200ms;
+
+  /* Log entry stagger. --log-step is the gap between consecutive lines;
+     --log-stagger-max caps the cascade (see the .log-line block below). */
+  --log-step: 30ms;
+}
+
+/* ── Interactive states ─────────────────────────────────────────────────────
+   Everything the pointer or keyboard can touch settles on the same curve. Only
+   colour-ish properties transition — `color`, `background-color`, `border-color`,
+   `opacity`, `transform`. Never a layout property (`transform-performance`).
+
+   Each base rule carries the EXIT timing (what plays when the pointer leaves);
+   the :hover / :focus-visible / :active rule overrides it with the enter timing.
+   That is what makes leaving quicker than arriving without a second selector set.
+   ── */
+.btn,
+.thumb,
+.seg-opt,
+.input,
+.nav a,
+a,
+.table tbody tr {
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: var(--dur-fast-exit);
+  transition-timing-function: var(--ease-in);
+}
+
+.btn:hover,
+.btn:focus-visible,
+.btn:active,
+.thumb:hover,
+.thumb:focus-visible,
+.thumb:active,
+.seg-opt:hover,
+.seg-opt:active,
+.seg-opt:has(input:focus-visible),
+.seg-opt:has(input:checked),
+.input:hover,
+.input:focus-visible,
+.nav a:hover,
+.nav a:focus-visible,
+a:hover,
+a:focus-visible,
+.table tbody tr:hover {
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+/* The selected thumbnail and the checked segment are a state change, not a hover,
+   so they read at --dur rather than --dur-fast. */
+.thumb-on,
+.seg-opt:has(input:checked) {
+  transition-duration: var(--dur);
+  transition-timing-function: var(--ease-out);
+}
+
+/* ── Press feedback ─────────────────────────────────────────────────────────
+   A 2% squeeze on press, released on pointer-up. `transform` only: the box keeps
+   its bounds in layout, nothing reflows, and `border-radius` stays 0.
+
+   Deliberately excluded: `.btn.blueprint`. Its four `<i class="corner">` marks sit
+   at -6px outside the border box, so scaling the button drags the registration
+   marks inward with it. A child counter-scale cannot undo that translation, so
+   those buttons get the colour transition and no squeeze rather than a squeeze
+   that breaks the frame. See the report for the component-side alternative.
+   ── */
+.btn:not(.blueprint):not(:disabled):active,
+.thumb:active {
+  transform: scale(0.98);
+}
+
+/* Release is an exit and needs no resting rule: the base `transform` stays `none`,
+   which the transition interpolates against as the identity matrix. Leaving it
+   `none` rather than `scale(1)` keeps the element off its own compositor layer at
+   rest, so hairlines and 12px caps stay crisp until the moment of the press. */
+
+/* ── Progress meters ────────────────────────────────────────────────────────
+   `.meter > div` is already scaleX in globals.css; this only moves its timing onto
+   the tokens. Progress is a measurement, so it stays linear — an ease would make
+   the bar look like it is guessing.
+
+   `.bar-mini > div` is NOT converted here. Its fill length arrives as an inline
+   `style={{ width }}` from ResultView.tsx, which this layer cannot read, so a CSS
+   scaleX override would silently blank the bar. Left exactly as globals.css has it;
+   the one-line component change it needs is in the report.
+   ── */
+.meter > div {
+  transition: transform var(--dur-slow) linear;
+}
+
+/* ── Activity log entry ─────────────────────────────────────────────────────
+   A new line means new information arrived, so it announces itself (`motion-meaning`):
+   an 8px rise and a fade, once, on insert.
+
+   The stagger is capped by construction. `.log` only ever appends, so an element's
+   :nth-child index is fixed for its lifetime and the delay is evaluated once, when
+   the line mounts. The first eight lines cascade at 30ms each — 210ms end to end —
+   and every line from the ninth on animates with zero delay. A burst of 40 events
+   therefore tops out at 210ms of stagger, not 1.2s.
+
+   Trade-off, stated plainly: this staggers by absolute position in the log, not by
+   position within a burst, so a mid-run burst fades in together instead of cascading.
+   Per-burst stagger needs an index from the component — see the report.
+   ── */
+@keyframes log-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.log-line {
+  animation: log-line-in var(--dur-fast) var(--ease-out) both;
+}
+
+.log-line:nth-child(1) { animation-delay: 0ms; }
+.log-line:nth-child(2) { animation-delay: calc(1 * var(--log-step)); }
+.log-line:nth-child(3) { animation-delay: calc(2 * var(--log-step)); }
+.log-line:nth-child(4) { animation-delay: calc(3 * var(--log-step)); }
+.log-line:nth-child(5) { animation-delay: calc(4 * var(--log-step)); }
+.log-line:nth-child(6) { animation-delay: calc(5 * var(--log-step)); }
+.log-line:nth-child(7) { animation-delay: calc(6 * var(--log-step)); }
+.log-line:nth-child(8) { animation-delay: calc(7 * var(--log-step)); }
+
+/* Cap: nothing past the eighth line waits at all. */
+.log-line:nth-child(n+9) { animation-delay: 0ms; }
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   globals.css already forces animation-duration / transition-duration to 0.01ms
+   for everything, which neutralises every transition above. It does NOT zero
+   *delays*, and `animation-fill-mode: both` on .log-line means a non-zero
+   animation-delay would hold a new line at opacity 0 for up to 210ms before
+   snapping in — a visible lag for exactly the users who asked for less motion.
+   So this block adds what the global one does not cover. It is additive; it does
+   not restate or weaken the global rule.
+   ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* No squeeze on press when motion is reduced — the colour change already
+     confirms the press. */
+  .btn:not(.blueprint):not(:disabled):active,
+  .thumb:active {
+    transform: none;
+  }
+}

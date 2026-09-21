@@ -20,6 +20,11 @@
   --color-neutral-800: #424244;
   --color-neutral-900: #2b2b2d;
 
+  /* The muted-text floor. neutral-600 (3.82:1) and -500 (2.57:1) fail AA against
+     --color-bg, so they are decoration tokens; all secondary *text* uses this.
+     Verified by scripts/check-contrast.mjs. */
+  --color-text-muted: var(--color-neutral-700);
+
   --color-accent-100: #eef6ff;
   --color-accent-200: #d6ebff;
   --color-accent-300: #b5d9fd;
@@ -34,12 +39,15 @@
   --font-heading-weight: 600;
   --font-body: var(--font-barlow), "Barlow", system-ui, sans-serif;
 
-  --space-1: 3.4px;
-  --space-2: 6.8px;
-  --space-3: 10.2px;
-  --space-4: 13.6px;
-  --space-6: 20.4px;
-  --space-8: 27.2px;
+  /* A 4pt rhythm for layout. Component-internal padding may use the 2pt half-steps
+     (6/10/14/18/22/26) the sheet already sits on; nothing uses odd pixels.
+     Enforced by scripts/check-spacing.mjs. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
 
   --radius-sm: 2px;
   --radius-md: 4px;
@@ -92,10 +100,44 @@ a:hover { color: var(--color-accent-900); }
 img { display: block; max-width: 100%; }
 figure { margin: 0; }
 
-.text-muted { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+.text-muted { color: var(--color-text-muted); }
 
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* Keyboard users land on the header links before the form; this lets them past.
+   Off-screen rather than display:none, so it stays focusable. */
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 100;
+  padding: 10px 14px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text);
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-4)));
+}
+.skip-link:focus-visible { transform: translateY(0); }
+
+/* Present to assistive tech, absent on screen. Not display:none — that removes it
+   from the accessibility tree too. */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
 
 /* — the blueprint frame: every card, figure and primary button is a wireframe
@@ -155,32 +197,54 @@ figure { margin: 0; }
   background: transparent;
   border: 1px solid var(--color-divider);
   border-radius: 0;
+  min-height: 44px;
   padding: var(--space-2) calc(var(--space-3) * 1.2);
 }
 
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { background: var(--color-accent); color: var(--color-bg); border-color: var(--color-accent); }
-.btn-primary:hover:not(:disabled) { background: var(--color-accent-600); border-color: var(--color-accent-600); }
-.btn-primary:active:not(:disabled) { background: var(--color-accent-700); border-color: var(--color-accent-700); }
+/* accent-700, not accent: --color-bg on --color-accent is 3.71:1 and fails AA for a
+   label. accent-700 gives 5.78:1. The lighter accent stays for rules and meters. */
+.btn-primary { background: var(--color-accent-700); color: var(--color-bg); border-color: var(--color-accent-700); }
+.btn-primary:hover:not(:disabled) { background: var(--color-accent-800); border-color: var(--color-accent-800); }
+.btn-primary:active:not(:disabled) { background: var(--color-accent-900); border-color: var(--color-accent-900); }
 .btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .btn-secondary:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
 
 /* — forms — */
-.field > label {
+/* A radio group is labelled by a <legend>, not by a <label for> pointing nowhere. */
+.field > legend {
+  padding: 0;
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
+  color: var(--color-text-muted);
+}
+.field > fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.field > label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
   color: color-mix(in srgb, var(--color-text) 70%, transparent);
 }
 
 .input {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 10px;
+  /* 44px is the touch-target minimum; 16px is the threshold below which iOS
+     auto-zooms on focus. Both are floors, not preferences. See MASTER.md §2.3/§3.5. */
+  min-height: 44px;
+  padding: 8px 10px;
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: transparent;
@@ -190,6 +254,13 @@ figure { margin: 0; }
 
 .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+
+.field-help {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
 
 .seg {
   display: inline-flex;
@@ -202,8 +273,9 @@ figure { margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
-  font-size: 13px;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 14px;
   cursor: pointer;
 }
 
@@ -217,35 +289,42 @@ figure { margin: 0; }
 .tag {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: 0;
 }
 
 .tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
 .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
-.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent-700); }
 
 /* — navigation — */
-.nav { display: flex; align-items: center; gap: var(--space-4); }
+.nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
 .nav-brand {
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
   font-size: 18px;
   margin-right: auto;
 }
-.nav a { color: inherit; text-decoration: none; font-size: 14px; }
+.nav a {
+  color: inherit;
+  text-decoration: none;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .nav a:hover { color: var(--color-accent); }
 
 /* — tables — */
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  color: var(--color-text-muted);
   padding: var(--space-2);
   border-bottom: 1px solid var(--color-divider);
 }
@@ -259,16 +338,25 @@ figure { margin: 0; }
    Research-to-Deck — composition. Only tokens and the classes above.
    ══════════════════════════════════════════════════════════════════════ */
 
-.shell { min-height: 100vh; background: var(--color-bg); color: var(--color-text); }
+.shell { min-height: 100dvh; background: var(--color-bg); color: var(--color-text); }
 .wrap { max-width: 1220px; margin: 0 auto; padding: 44px 28px 72px; }
-.site-nav { max-width: 1220px; margin: 0 auto; padding: 18px 28px; gap: 24px; align-items: baseline; }
+.site-nav {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 8px 28px;
+  gap: 24px;
+  align-items: center;
+  row-gap: 0;
+}
+/* The brand takes its own row on a phone, so the links below it never get clipped. */
+.brand-lock { flex: 0 0 auto; }
 .rule { height: 1px; background: var(--color-divider); }
 
 .brand-lock { margin-right: auto; display: flex; align-items: baseline; gap: 10px; }
 .brand-lock .mark { font-size: 19px; letter-spacing: -0.01em; }
 .brand-lock .sub {
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-accent-700);
@@ -280,7 +368,7 @@ figure { margin: 0; }
   align-items: center;
   gap: 12px;
   margin-bottom: 24px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--color-accent-700);
@@ -289,7 +377,7 @@ figure { margin: 0; }
 .eyebrow .sheet {
   flex: none;
   letter-spacing: 0.14em;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 
 /* The gridded hero plate. */
@@ -322,7 +410,7 @@ figure { margin: 0; }
   gap: 10px;
   margin: 0 0 22px;
   color: var(--color-accent-700);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -358,7 +446,7 @@ figure { margin: 0; }
 }
 
 .panel-label {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--color-accent-700);
@@ -372,14 +460,14 @@ figure { margin: 0; }
   margin-bottom: 14px;
 }
 .panel-head .meta {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 
 .topic-input {
-  min-height: 52px;
+  min-height: 56px;
   font-size: 17px;
   font-family: var(--font-heading);
   letter-spacing: 0.01em;
@@ -403,7 +491,7 @@ figure { margin: 0; }
 
 .btn-generate {
   font-size: 16px;
-  padding: 13px 26px;
+  padding: 12px 26px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -427,7 +515,7 @@ figure { margin: 0; }
   font-size: 19px;
   text-transform: uppercase;
   letter-spacing: 0.01em;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 .step p { font-size: 13px; line-height: 1.5; color: var(--color-neutral-700); margin: 0; }
 
@@ -445,10 +533,10 @@ figure { margin: 0; }
   align-items: baseline;
   gap: 10px;
   margin-top: -16px;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 .fig-caption .n { color: var(--color-accent-700); }
 .fig-caption .fill { flex: 1; height: 1px; background: var(--color-divider); }
@@ -480,11 +568,11 @@ figure { margin: 0; }
 
 .sheet-foot {
   margin: 0;
-  padding: 11px 18px;
-  font-size: 11px;
+  padding: 12px 18px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 
 .section-title {
@@ -520,7 +608,8 @@ figure { margin: 0; }
 .reverse .eyebrow .fill { background: color-mix(in srgb, #f2f2f3 30%, transparent); }
 .reverse .eyebrow .sheet { color: color-mix(in srgb, #f2f2f3 62%, transparent); }
 .reverse h2 { color: var(--color-bg); }
-.reverse .hatch {
+.reverse .hatch,
+.reverse.hatch {
   background-image: repeating-linear-gradient(45deg, color-mix(in srgb, #f2f2f3 6%, transparent) 0 1px, transparent 1px 9px);
 }
 .reverse-lede {
@@ -542,7 +631,7 @@ figure { margin: 0; }
   font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--color-accent-300);
-  padding-top: 3px;
+  padding-top: 4px;
 }
 .proof-title {
   font-family: var(--font-heading);
@@ -600,7 +689,7 @@ figure { margin: 0; }
   max-width: 24ch;
 }
 .cta-kicker {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   opacity: 0.75;
@@ -626,10 +715,10 @@ figure { margin: 0; }
   flex-wrap: wrap;
   gap: 16px;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 
 .form-error {
@@ -647,12 +736,12 @@ figure { margin: 0; }
   align-items: baseline;
   gap: 14px;
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--color-accent-700);
 }
-.run-head .job { letter-spacing: 0.12em; color: var(--color-neutral-600); }
+.run-head .job { letter-spacing: 0.12em; color: var(--color-text-muted); }
 
 .run-title {
   font-size: clamp(30px, 4vw, 46px);
@@ -664,9 +753,29 @@ figure { margin: 0; }
 }
 .run-sub { font-size: 14px; color: var(--color-neutral-700); margin: 0 0 26px; }
 
+/* A run that has outrun our polling: the worker is fine, this page is behind. */
+.notice {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 1px solid var(--color-accent-700);
+  border-left-width: 3px;
+  background: var(--color-accent-100);
+  color: var(--color-accent-900);
+}
+
 .meter { height: 6px; border: 1px solid var(--color-divider); margin-bottom: 10px; }
-.meter > div { height: 100%; background: var(--color-accent); transition: width 0.4s linear; }
+/* scaleX, not width: width is a layout property and reflows the row on every tick. */
+.meter > div {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: var(--color-accent);
+  transition: transform 0.4s linear;
+}
 .meter.failed > div { background: var(--color-neutral-700); }
+
+.phase-list { list-style: none; margin: 0; padding: 0; }
 
 .meter-legend {
   display: flex;
@@ -682,24 +791,26 @@ figure { margin: 0; }
   display: flex;
   gap: 12px;
   align-items: baseline;
-  padding: 11px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--color-divider);
 }
 .phase .mark { width: 16px; font-family: var(--font-heading); font-size: 13px; }
 .phase .label { font-size: 14px; flex: 1; }
 .phase .stat {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 .phase-done .mark,
 .phase-done .label { color: var(--color-text); }
 .phase-active .mark,
 .phase-active .label { color: var(--color-accent-700); }
+/* Pending is signalled by the '·' mark and the muted tone together, never colour
+   alone — see MASTER.md §2.2 (color-not-only). */
 .phase-todo .mark,
-.phase-todo .label { color: var(--color-neutral-500); }
+.phase-todo .label { color: var(--color-text-muted); }
 .phase-failed .mark,
 .phase-failed .label { color: var(--color-neutral-900); }
 
@@ -731,17 +842,17 @@ figure { margin: 0; }
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
   word-break: break-word;
 }
-.log-line time { color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.log-line time { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 .log-stage {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
   align-self: start;
   padding-top: 2px;
 }
-.log-detail { grid-column: 3; font-size: 11px; color: var(--color-neutral-600); }
+.log-detail { grid-column: 3; font-size: 11px; color: var(--color-text-muted); }
 .log-success .log-message { color: var(--color-accent-800); }
 .log-warn .log-message { color: var(--color-neutral-700); }
 .log-error .log-message { color: var(--color-neutral-900); font-weight: 500; }
@@ -769,6 +880,10 @@ figure { margin: 0; }
 .result-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .result-actions .btn { text-transform: uppercase; letter-spacing: 0.04em; }
 
+/* The rail scrolls horizontally, so it needs to *look* scrollable. The mask fades the
+   right edge only while there is more to reach; --more is set from the scroll position.
+   scroll-padding keeps a keyboard-focused thumb clear of the fade. */
+.thumb-rail { position: relative; }
 .thumbs {
   display: flex;
   gap: 8px;
@@ -776,20 +891,27 @@ figure { margin: 0; }
   padding-bottom: 12px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--color-divider);
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 32px;
+  overscroll-behavior-x: contain;
+  -webkit-mask-image: linear-gradient(to right, #000 0 calc(100% - var(--more, 0px)), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0 calc(100% - var(--more, 0px)), transparent 100%);
 }
+.thumb { scroll-snap-align: start; }
 .thumb {
   text-align: left;
+  min-height: 44px;
   cursor: pointer;
   font-family: var(--font-body);
   flex: 0 0 auto;
   width: 148px;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border: 1px solid var(--color-divider);
   background: transparent;
   color: inherit;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   align-items: flex-start;
 }
 .thumb:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
@@ -800,13 +922,13 @@ figure { margin: 0; }
   justify-content: space-between;
   width: 100%;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   color: var(--color-accent-700);
 }
-.thumb-head .cites { color: var(--color-neutral-600); }
+.thumb-head .cites { color: var(--color-text-muted); }
 .thumb-title {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -814,9 +936,12 @@ figure { margin: 0; }
   overflow: hidden;
 }
 
+/* The basis values decide *when* the aside drops below rather than how wide it is:
+   560 + 300 + 28 only fits past ~900px, so at 768 the slide gets the full width
+   instead of being squeezed to 427px beside a 257px column. */
 .result-cols { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
-.result-main { flex: 1 1 420px; min-width: 0; }
-.result-aside { flex: 1 1 250px; min-width: 0; max-width: 340px; display: flex; flex-direction: column; gap: 22px; }
+.result-main { flex: 1 1 560px; min-width: 0; }
+.result-aside { flex: 1 1 300px; min-width: 0; max-width: 340px; display: flex; flex-direction: column; gap: 22px; }
 
 .slide {
   aspect-ratio: 16 / 9;
@@ -837,10 +962,10 @@ figure { margin: 0; }
   display: flex;
   gap: 12px;
   align-items: baseline;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 .slide-head .count .n { color: var(--color-accent-700); }
 .slide h3 {
@@ -875,7 +1000,7 @@ figure { margin: 0; }
   border-top: 1px solid var(--color-divider);
   font-size: 10px;
   letter-spacing: 0.04em;
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -885,23 +1010,32 @@ figure { margin: 0; }
 .notes-panel p { font-size: 14px; line-height: 1.55; margin: 0; color: var(--color-neutral-800); }
 
 .bar-mini { height: 5px; border: 1px solid var(--color-divider); }
-.bar-mini > div { height: 100%; background: var(--color-accent); transition: width 0.3s; }
+/* scaleX, not width — the fill is driven by a transform in ResultView. */
+.bar-mini > div {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: var(--color-accent);
+  transition: transform var(--dur, 220ms) var(--ease-out, ease-out);
+}
 .bar-legend {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-neutral-700);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .source-list { display: flex; flex-direction: column; gap: 12px; }
 .source { border-top: 1px solid var(--color-divider); padding-top: 9px; }
 .source .t { font-size: 13px; line-height: 1.35; }
-.source .m { font-size: 11px; color: var(--color-neutral-600); margin-top: 3px; }
+.source .m { font-size: 12px; color: var(--color-text-muted); margin-top: 3px; }
 
 @media (max-width: 640px) {
   .wrap { padding: 28px 16px 56px; }
-  .site-nav { padding: 14px 16px; gap: 14px; }
+  .site-nav { padding: 4px 16px 8px; gap: 14px; }
+  .brand-lock { flex: 1 0 100%; margin-right: 0; padding-top: 10px; }
+  .nav-auth { margin-left: auto; }
   .hero-title { font-size: clamp(38px, 12vw, 56px); }
   .log-line { grid-template-columns: auto 1fr; }
   .log-stage { display: none; }
@@ -919,3 +1053,44 @@ figure { margin: 0; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Auth pages (Clerk) -------------------------------------------------------
+   Clerk's widgets ship their own rounded, shadowed card. These rules flatten them
+   onto the Industry sheet: our fonts, square corners, one hairline border from the
+   surrounding .blueprint frame instead of two. */
+.auth-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+.auth-title { font-size: clamp(30px, 5vw, 44px); margin-bottom: var(--space-3); }
+.auth-blurb {
+  color: var(--color-neutral-700);
+  margin: 0 0 var(--space-8);
+  max-width: 46ch;
+}
+.auth-panel { background: var(--color-neutral-100); padding: 24px 20px; }
+.auth-panel .cl-rootBox,
+.auth-panel .cl-cardBox,
+.auth-panel .cl-card {
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+  border: 0;
+  background: transparent;
+}
+.auth-panel .cl-headerTitle { font-family: var(--font-heading); letter-spacing: -0.015em; }
+.auth-panel .cl-formButtonPrimary,
+.auth-panel .cl-socialButtonsBlockButton,
+.auth-panel .cl-formFieldInput {
+  border-radius: var(--radius-sm);
+  text-transform: none;
+}
+.auth-panel .cl-footer { background: transparent; }
+
+/* The signed-in avatar menu in the site header. */
+/* .brand-lock already pushes the header's trailing items right; this only needs
+   to re-center the avatar against the nav's baseline alignment. */
+.nav-auth { display: flex; align-items: center; gap: var(--space-3); align-self: center; }
+.nav-auth .cl-userButtonAvatarBox { width: 28px; height: 28px; }

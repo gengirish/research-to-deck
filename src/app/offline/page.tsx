@@ -4,7 +4,7 @@ export const metadata: Metadata = { title: "Offline · Research-to-Deck" };
 
 export default function Offline() {
   return (
-    <main>
+    <main className="wrap">
       <div className="eyebrow">IntelliForge Deep Research</div>
       <h1>You&rsquo;re offline</h1>
       <p className="lede">

@@ -11,12 +11,19 @@
     "db:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate.ts",
     "smoke": "node --env-file-if-exists=.env.local --import tsx scripts/smoke.ts",
     "lint": "eslint .",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:spacing": "node scripts/check-spacing.mjs",
+    "check:ds": "npm run lint && npm run check:contrast && npm run check:spacing",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "test:py": "python -m unittest discover -s python -p \"test_*.py\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
+    "@clerk/nextjs": "^7.9.4",
     "agentmail": "^0.5.27",
     "bullmq": "^6.3.8",
     "ioredis": "^5.11.1",
@@ -28,6 +35,8 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22",
     "@types/pg": "^8.11.0",
     "@types/react": "^19",
