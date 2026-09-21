@@ -66,6 +66,13 @@ streams it straight out.
   middleware convention; Clerk 7 supports it) only establishes the session, it protects no route,
   because `auth.protect()` would answer the JSON API with an opaque 404. The AgentMail webhook is
   authenticated by its Svix signature, not by Clerk, and the worker never authenticates at all.
+- **Billing boundary.** Billing is on iff `STRIPE_SECRET_KEY` is set (`isBillingEnabled`); off means
+  unlimited free runs, so never make a code path require Stripe. A run's credit is spent in the
+  same transaction that inserts its job (`createPaidJob`), and every failure path must call
+  `refundJob` (idempotent via `jobs.credit_refunded_at`). `jobs.charged_to` (who paid) is separate
+  from `jobs.user_id` (who may read it) because email jobs are paid but ownerless. Credits are only
+  granted by the signed Stripe webhook, keyed on the Checkout session id. `src/lib/stripe.ts` is
+  app-only: the worker must not import it.
 - **Count limits** (8–12 slides, 3–5 bullets) live in `DECK_RULES`, not in the Zod schema — the
   schema stays loose so a near-miss can be repaired instead of rejected. Change them in one place.
 - **Retrieval scoping.** The vector query in `src/lib/retrieval.ts` uses a `MATERIALIZED` CTE to force

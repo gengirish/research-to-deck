@@ -156,6 +156,7 @@ export default function Home() {
           <span className="sub">Research / Deck</span>
         </div>
         <a href={`${REPO}#api`}>API</a>
+        {authLoaded && isSignedIn && <a href="/billing">Credits &amp; brand</a>}
         <span className="tag tag-outline" style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 12 }}>
           Beta
         </span>

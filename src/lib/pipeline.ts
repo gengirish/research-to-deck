@@ -1,3 +1,4 @@
+import { getBrand } from "./brand";
 import { toRenderDeck } from "./citations";
 import { env } from "./env";
 import { attachPapersToJob, findPapers, ingestPapers } from "./ingest";
@@ -134,13 +135,19 @@ export async function runDeckJob(jobId: string): Promise<void> {
 
   await updateJob(jobId, { stage: "rendering", progress: 90 });
   t = Date.now();
-  await logJobEvent(jobId, "rendering", "Handing the deck to python-pptx for branded rendering");
+  // The brand was decided when the job was created; a brand deleted since falls back to the default.
+  const custom = job.brand_user_id ? await getBrand(job.brand_user_id) : null;
+  await logJobEvent(
+    jobId,
+    "rendering",
+    custom ? `Handing the deck to python-pptx with the "${custom.brand.name}" brand` : "Handing the deck to python-pptx for branded rendering",
+  );
   const renderDeck = toRenderDeck(deck, sources, {
     topic: job.topic,
     generatedOn: new Date().toISOString().slice(0, 10),
     statsLine: `Synthesized from ${ingest.papers} papers (${ingest.pdf} full-text, ${ingest.abstract + ingest.titleOnly} abstract-only) via ${paperSourceLabel()}`,
   });
-  const pptx = await renderPptx(renderDeck);
+  const pptx = await renderPptx(renderDeck, custom);
   timings.render_s = seconds(t);
   timings.total_s = seconds(t0);
 

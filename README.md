@@ -90,7 +90,9 @@ npm run worker                       # terminal 2: BullMQ worker
 | `AGENTMAIL_INBOX_USERNAME` | app + worker | optional, default `decks` — the system inbox is `decks@<domain>` |
 | `AGENTMAIL_INBOX_ID` | app + worker | optional. Reuse an existing inbox (an address) instead of creating one. Required when the account is at its plan inbox limit |
 | `AGENTMAIL_WEBHOOK_SECRET` | app | `whsec_…` Svix secret; required only for inbound email. Leave unset for outbound-only |
-| `APP_BASE_URL` | worker | public origin for the download/status links inside emails |
+| `APP_BASE_URL` | app + worker | public origin for the download/status links inside emails, and the sign-up link in "no account" email replies |
+| `STRIPE_SECRET_KEY` | app | optional. Unset means billing is off and runs are unlimited. Set, it turns on credits (see [Billing](#billing-stripe)) |
+| `STRIPE_WEBHOOK_SECRET` | app | `whsec_…` for `POST /api/webhooks/stripe`. Required once `STRIPE_SECRET_KEY` is set, or purchases never grant credits |
 
 ## API
 
@@ -183,6 +185,60 @@ Run the whole flow end to end and save the deck to `smoke-deck.pptx`:
 # origin; creating and reading a job both need one.
 SMOKE_COOKIE="__session=..." npm run smoke -- http://localhost:3000 "retrieval-augmented generation evaluation" 50
 ```
+
+## Billing (Stripe)
+
+Billing is optional. With `STRIPE_SECRET_KEY` unset, every run is free, and the `/billing` page
+says so.
+
+**Credits.** One credit is one deck run. A new account starts with **1 free credit**, then buys packs
+through Stripe Checkout:
+
+| Pack | Price | Per deck |
+|---|---|---|
+| 1 deck | $15 | $15 |
+| 5 decks | $49 | $9.80 |
+| 20 decks | $149 | $7.45 |
+
+The price list is `CREDIT_PACKS` in [src/lib/billing.ts](src/lib/billing.ts) and nowhere else. Checkout uses
+inline `price_data`, so no products need creating in Stripe.
+
+- `POST /api/decks` spends the credit and creates the job **in one transaction**. It answers `402` with
+  `{"error", "balance": 0, "billingUrl": "/billing"}` when the balance is empty. The balance is debited with a
+  conditional `UPDATE … WHERE balance >= 1`, so concurrent runs can never overdraw it.
+- A job that fails (in the worker, or because the queue was unreachable) **gets its credit back**, once,
+  claimed by `jobs.credit_refunded_at`.
+- `credit_ledger` records every change (`free_grant`, `purchase`, `deck`, `refund`). Its sum always equals
+  the balance.
+- The webhook grants credits keyed on the Checkout session id, so Stripe's redeliveries grant nothing.
+
+**Custom branding is the paid feature.** After a first purchase, `/billing` lets an account set its deck name,
+footer, three colors and a PNG/JPEG logo (≤512 KB, checked by file signature). The brand is fixed when the
+job is created (`jobs.brand_user_id`) and the worker hands it to `render_deck.py` through `BRAND_CONFIG`.
+Fonts and text colors stay the defaults.
+
+**Email jobs are paid too.** With billing on, an inbound email only starts a deck if the sender's address
+is a *verified* email on a Clerk account with credit. That account is charged, and the job stays ownerless so
+the emailed link still works. Other senders get a reply pointing them at sign-up or `/billing`.
+
+Set it up:
+
+1. Stripe dashboard → Developers → Webhooks → add endpoint `https://<app>/api/webhooks/stripe` with events
+   `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy its signing secret.
+2. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` on the **Vercel** project (the worker needs neither).
+3. Run `npm run db:migrate` against production **before** deploying the app: the job routes read the columns
+   added by `006_billing.sql`.
+
+Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints a `whsec_…` to use, and
+card `4242 4242 4242 4242` completes a test checkout.
+
+| Route | Rule |
+|---|---|
+| `GET /api/billing` | session; balance, paid flag, packs |
+| `POST /api/billing/checkout` | session; `{packId}` → `{url}` of a Checkout session |
+| `GET/PUT/DELETE /api/brand` | session; `PUT` is multipart and answers `402` before a first purchase |
+| `GET /api/brand/logo` | session; your own logo, for the preview |
+| `POST /api/webhooks/stripe` | no session; authenticated by its Stripe signature |
 
 ## Authentication (Clerk)
 
@@ -286,7 +342,14 @@ src/lib/agentmailWebhook.ts   Svix signature verification + inbound parsing
 src/app/api/webhooks/         inbound AgentMail webhook
 worker/index.ts               BullMQ worker
 python/render_deck.py         python-pptx renderer (brand.json)
-db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json, job owner)
+src/lib/billing.ts            credit packs, balance, charge/refund/grant (transactions)
+src/lib/stripe.ts             Stripe client, Checkout params, session → purchase (app only)
+src/lib/brand.ts              brand validation, storage, brand.json overlay
+src/lib/clerkUsers.ts         verified-email → Clerk user, for paid email jobs
+src/app/billing/              credits + brand page
+src/app/api/billing, brand/   credits, checkout, brand CRUD
+src/app/api/webhooks/stripe/  Stripe webhook
+db/migrations/                schema (papers, chunks + HNSW, jobs, cache, email delivery, job activity log, deck json, job owner, billing)
 ```
 
 ### Paper search provider

@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { refundJob } from "../src/lib/billing";
 import { logJobEvent, updateJob } from "../src/lib/jobs";
 import { notifyDeckFailed } from "../src/lib/notify";
 import { runDeckJob } from "../src/lib/pipeline";
@@ -19,6 +20,10 @@ worker.on("failed", async (job, err) => {
       console.error("[worker] could not record failure:", e),
     );
     await logJobEvent(job.data.jobId, "failed", err.message.slice(0, 400), { level: "error" });
+    // A failed run should not cost a credit. No-op for unbilled jobs and on a repeat.
+    if (await refundJob(job.data.jobId).catch((e) => (console.error("[worker] could not refund credit:", e), false))) {
+      await logJobEvent(job.data.jobId, "failed", "The credit for this run was returned to your balance", { level: "info" });
+    }
     await notifyDeckFailed(job.data.jobId, err.message).catch((e) => console.error("[worker] could not send failure email:", e));
   }
 });

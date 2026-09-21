@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { parseAddress, parseDeckRequest, parseWebhookEvent, readSvixHeaders, verifyWebhookSignature } from "@/lib/agentmailWebhook";
+import { canUseCustomBrand, createPaidJob, getAccount, isBillingEnabled, refundJob } from "@/lib/billing";
+import { hasBrand } from "@/lib/brand";
+import { findUserIdByEmail } from "@/lib/clerkUsers";
 import { isEmailEnabled, replyAccepted, replyRejected } from "@/lib/email";
 import { env } from "@/lib/env";
 import { attachInboundEventJob, claimInboundEvent, createJob, releaseInboundEvent, updateJob } from "@/lib/jobs";
@@ -62,17 +65,31 @@ export async function POST(request: Request) {
 
     const { topic, paperCount } = parsed.request;
     const jobId = randomUUID();
-    await createJob(jobId, topic, paperCount, {
-      notifyEmail: sender,
-      replyInboxId: message.inbox_id,
-      replyMessageId: message.message_id,
-    });
+    // The job stays ownerless (no userId) so the emailed download link keeps working;
+    // with billing on it is still paid for, by the account that owns the sender address.
+    const delivery = { notifyEmail: sender, replyInboxId: message.inbox_id, replyMessageId: message.message_id };
+    if (isBillingEnabled()) {
+      const payer = await findUserIdByEmail(sender);
+      if (!payer) {
+        const reason = `decks by email need an account with credits. Sign up at ${env.appBaseUrl} with this address, then email again`;
+        await replyRejected(message.inbox_id, message.message_id, reason);
+        return NextResponse.json({ status: "rejected", reason: "No account for sender" });
+      }
+      const brandUserId = canUseCustomBrand(await getAccount(payer)) && (await hasBrand(payer)) ? payer : undefined;
+      if (!(await createPaidJob(payer, jobId, topic, paperCount, { ...delivery, brandUserId }))) {
+        await replyRejected(message.inbox_id, message.message_id, `your account is out of credits. Buy more at ${env.appBaseUrl}/billing`);
+        return NextResponse.json({ status: "rejected", reason: "Out of credits" });
+      }
+    } else {
+      await createJob(jobId, topic, paperCount, delivery);
+    }
     await attachInboundEventJob(eventId, jobId);
 
     try {
       await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
     } catch (err) {
       await updateJob(jobId, { status: "failed", stage: "failed", error: "Could not enqueue job" });
+      await refundJob(jobId).catch((e) => console.error("[agentmail] refund failed", e));
       console.error("[agentmail] enqueue failed", err);
       await replyRejected(message.inbox_id, message.message_id, "our queue is temporarily unavailable — please resend shortly");
       return NextResponse.json({ status: "rejected", reason: "Queue unavailable" });

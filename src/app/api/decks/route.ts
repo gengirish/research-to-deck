@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { canUseCustomBrand, createPaidJob, getAccount, isBillingEnabled, refundJob } from "@/lib/billing";
+import { hasBrand } from "@/lib/brand";
 import { isEmailEnabled } from "@/lib/email";
 import { createJob, logJobEvent, updateJob } from "@/lib/jobs";
 import { getDeckQueue } from "@/lib/queue";
@@ -39,13 +41,27 @@ export async function POST(request: Request) {
   }
 
   const jobId = randomUUID();
-  await createJob(jobId, topic, paperCount, { userId, notifyEmail: email });
+  const billing = isBillingEnabled();
+  const account = billing ? await getAccount(userId) : null;
+  // The brand is fixed now, so a purchase or brand edit mid-run cannot change the deck.
+  const brandUserId = canUseCustomBrand(account, billing) && (await hasBrand(userId)) ? userId : undefined;
+  const delivery = { userId, notifyEmail: email, brandUserId };
+
+  if (billing) {
+    // Spends the credit and creates the job in one transaction, or does neither.
+    if (!(await createPaidJob(userId, jobId, topic, paperCount, delivery))) {
+      return NextResponse.json({ error: "You're out of credits. Buy more to start a run.", balance: 0, billingUrl: "/billing" }, { status: 402 });
+    }
+  } else {
+    await createJob(jobId, topic, paperCount, delivery);
+  }
   try {
     await getDeckQueue().add("deck", { jobId }, { jobId, attempts: 1, removeOnComplete: 200, removeOnFail: 500 });
     await logJobEvent(jobId, "queued", "Request accepted and queued for a worker", { detail: { topic, paperCount } });
   } catch (err) {
     await updateJob(jobId, { status: "failed", stage: "failed", error: "Could not enqueue job" });
     await logJobEvent(jobId, "failed", "Could not reach the job queue", { level: "error" });
+    await refundJob(jobId).catch((e) => console.error("refund failed", e));
     console.error("enqueue failed", err);
     return NextResponse.json({ error: "Queue unavailable, try again shortly" }, { status: 503 });
   }

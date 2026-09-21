@@ -62,6 +62,15 @@ export const env = {
   get agentMailWebhookSecret(): string | undefined {
     return process.env.AGENTMAIL_WEBHOOK_SECRET || undefined;
   },
+  // --- Stripe (optional: without a secret key billing is off and runs are unlimited) ---
+  get stripeSecretKey(): string | undefined {
+    return process.env.STRIPE_SECRET_KEY || undefined;
+  },
+  /** Signing secret (whsec_...) for POST /api/webhooks/stripe. */
+  get stripeWebhookSecret(): string | undefined {
+    return process.env.STRIPE_WEBHOOK_SECRET || undefined;
+  },
+
   /** Public origin used to build download links inside emails. */
   get appBaseUrl(): string {
     return (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");

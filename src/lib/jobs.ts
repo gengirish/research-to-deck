@@ -1,4 +1,4 @@
-import { getPool } from "./db";
+import { getPool, type Queryable } from "./db";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 export type JobStage = "queued" | "searching" | "ingesting" | "retrieving" | "synthesizing" | "rendering" | "done" | "failed";
@@ -18,6 +18,10 @@ export interface JobRow {
   reply_inbox_id: string | null;
   reply_message_id: string | null;
   notified_at: Date | null;
+  /** Clerk user whose credit paid for this run; NULL when billing was off. */
+  charged_to: string | null;
+  /** Clerk user whose saved brand the renderer applies; NULL for the default brand. */
+  brand_user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -30,13 +34,33 @@ export interface JobDelivery {
   /** Set when the job arrived over email, so the deck goes back as an in-thread reply. */
   replyInboxId?: string;
   replyMessageId?: string;
+  /** Clerk user whose credit pays for the run. */
+  chargedTo?: string;
+  /** Clerk user whose saved brand the deck is rendered with. */
+  brandUserId?: string;
 }
 
-export async function createJob(id: string, topic: string, paperCount: number, delivery: JobDelivery = {}): Promise<void> {
-  await getPool().query(
-    `INSERT INTO jobs (id, user_id, topic, paper_count, notify_email, reply_inbox_id, reply_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, delivery.userId ?? null, topic, paperCount, delivery.notifyEmail ?? null, delivery.replyInboxId ?? null, delivery.replyMessageId ?? null],
+export async function createJob(
+  id: string,
+  topic: string,
+  paperCount: number,
+  delivery: JobDelivery = {},
+  db: Queryable = getPool(),
+): Promise<void> {
+  await db.query(
+    `INSERT INTO jobs (id, user_id, topic, paper_count, notify_email, reply_inbox_id, reply_message_id, charged_to, brand_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      id,
+      delivery.userId ?? null,
+      topic,
+      paperCount,
+      delivery.notifyEmail ?? null,
+      delivery.replyInboxId ?? null,
+      delivery.replyMessageId ?? null,
+      delivery.chargedTo ?? null,
+      delivery.brandUserId ?? null,
+    ],
   );
 }
 
@@ -55,7 +79,8 @@ export function canAccessJob(job: Pick<JobRow, "user_id">, userId: string | null
 export async function getJob(id: string): Promise<JobRow | null> {
   const { rows } = await getPool().query<JobRow>(
     `SELECT id, user_id, topic, paper_count, status, stage, progress, error, stats, deck_name,
-            notify_email, reply_inbox_id, reply_message_id, notified_at, created_at, updated_at
+            notify_email, reply_inbox_id, reply_message_id, notified_at, charged_to, brand_user_id,
+            created_at, updated_at
        FROM jobs WHERE id = $1`,
     [id],
   );
