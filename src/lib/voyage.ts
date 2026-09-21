@@ -1,3 +1,4 @@
+import { stripControlChars } from "./chunk";
 import { env } from "./env";
 import { fetchWithRetry, HttpError } from "./http";
 
@@ -6,6 +7,14 @@ export const EMBEDDING_MODEL = "voyage-3.5";
 export const EMBEDDING_DIM = 1024;
 export const RERANK_MODEL = "rerank-2.5";
 const EMBED_BATCH = 64;
+
+/**
+ * Last line of defence before text leaves the process: one lone surrogate anywhere in a
+ * batch is invalid UTF-8 and fails the whole request with a 400, whatever its origin
+ * (PDF text, provider metadata, a Claude-written sub-query). An empty string is also
+ * rejected, so a text reduced to nothing becomes a single space.
+ */
+const voyageText = (s: string) => stripControlChars(s) || " ";
 
 async function voyagePost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetchWithRetry(
@@ -26,7 +35,7 @@ export async function embed(texts: string[], inputType: "document" | "query"): P
   for (let i = 0; i < texts.length; i += EMBED_BATCH) {
     const batch = texts.slice(i, i + EMBED_BATCH);
     const res = await voyagePost<{ data: { embedding: number[]; index: number }[] }>("/embeddings", {
-      input: batch,
+      input: batch.map(voyageText),
       model: EMBEDDING_MODEL,
       input_type: inputType,
       output_dimension: EMBEDDING_DIM,
@@ -41,8 +50,8 @@ export async function embed(texts: string[], inputType: "document" | "query"): P
 export async function rerank(query: string, documents: string[], topK: number): Promise<{ index: number; score: number }[]> {
   if (documents.length === 0) return [];
   const res = await voyagePost<{ data: { index: number; relevance_score: number }[] }>("/rerank", {
-    query,
-    documents,
+    query: voyageText(query),
+    documents: documents.map(voyageText),
     model: RERANK_MODEL,
     top_k: Math.min(topK, documents.length),
   });
